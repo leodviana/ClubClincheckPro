@@ -1,0 +1,22 @@
+@import './tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 10% 20%, rgba(255, 42, 149, 0.18) 0%, rgba(255, 42, 149, 0) 45%),
+    radial-gradient(circle at 90% 10%, rgba(196, 48, 255, 0.15) 0%, rgba(196, 48, 255, 0) 40%),
+    radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0) 45%),
+    var(--bg);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.main-bg {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
