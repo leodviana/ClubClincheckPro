@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
+import { useAuth } from "@/hooks/useAuth";
 
 type ChatRow = { id: string; paciente: string; dentista: string; status: "aberto"|"andamento"|"fechado"; updatedAt: string; };
 const DATA: ChatRow[] = [
@@ -11,6 +13,19 @@ const DATA: ChatRow[] = [
 ];
 
 export default function AdminChatsPage() {
+  const { isAuthenticated, user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated && user?.profile !== 1) {
+      router.replace("/");
+    }
+    // If not authenticated, redirect to login
+    if (!isAuthenticated) {
+      router.replace(`/login?next=${encodeURIComponent("/admin/chats")}`);
+    }
+  }, [isAuthenticated, user, router]);
+
   const [q, setQ] = useState("");  
   const [status, setStatus] = useState<"todos"|ChatRow["status"]>("todos");
 
@@ -38,7 +53,8 @@ export default function AdminChatsPage() {
       </div>
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-[720px] w-full text-sm">
           <thead className="bg-slate-50 text-left text-muted">
             <tr>
               <th className="py-3 px-4">Chat</th>
@@ -68,7 +84,8 @@ export default function AdminChatsPage() {
               <tr><td colSpan={6} className="py-10 text-center text-muted">Nenhum chat encontrado com os filtros atuais.</td></tr>
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </Card>
     </div>
   );

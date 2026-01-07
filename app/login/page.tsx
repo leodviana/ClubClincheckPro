@@ -83,7 +83,15 @@ export default function LoginPage() {
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              
+              <label className="inline-flex items-center gap-2 text-sm text-muted select-none">
+                <input
+                  type="checkbox"
+                  checked={manterLogado}
+                  onChange={(e) => setManterLogado(e.target.checked)}
+                  className="h-4 w-4 rounded border"
+                />
+                Manter logado
+              </label>
               <Link href="/recuperar" className="text-sm text-brand-blue hover:underline">
                 Esqueci minha senha
               </Link>

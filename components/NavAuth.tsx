@@ -4,13 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { Avatar } from "@/components/ui/Avatar";
 
-type Props = {
-  showAdminLink?: boolean;
-};
-
-export default function NavAuth({ showAdminLink = true }: Props) {
-  const { isAuthenticated, signOut } = useAuth();
+export default function NavAuth() {
+  const { isAuthenticated, user, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname() || "/";
 
@@ -27,8 +24,17 @@ export default function NavAuth({ showAdminLink = true }: Props) {
 
   return (
     <nav className="flex items-center gap-4 text-sm text-muted">
-      <Link href="/" className="hover:text-text">Início</Link>
-      {showAdminLink && <Link href="/admin/chats" className="hover:text-text">Admin</Link>}
+      {user?.profile === 1 ? (
+        <Link href="/admin/chats" className="hover:text-text">Admin</Link>
+      ) : (
+        <Link href="/" className="hover:text-text">Início</Link>
+      )}
+
+      <div className="flex items-center gap-3">
+        <Avatar name={user?.nome ?? user?.email ?? "Usuário"} />
+        <span className="text-sm font-medium hidden sm:inline">{user?.nome ?? user?.email}</span>
+      </div>
+
       <button
         type="button"
         disabled={busy}

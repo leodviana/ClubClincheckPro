@@ -15,6 +15,10 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   /** Tenta renovar a sessão via refresh cookie; retorna o novo accessToken (ou null). */
   refreshSession: () => Promise<string | null>;
+
+  /** Mensagem de erro relacionada à sessão (ex.: falha ao refresh) */
+  authError: string | null;
+  clearAuthError: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -23,6 +27,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const clearAuthError = useCallback(() => setAuthError(null), []);
 
   const refreshSession = useCallback(async (): Promise<string | null> => {
     try {
@@ -30,8 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(res.accessToken);
       // endpoint /auth/refresh normalmente não retorna user; mantém o atual.
       setStatus("authenticated");
+      setAuthError(null);
       return res.accessToken;
-    } catch {
+    } catch (err: any) {
+      if (process.env.NODE_ENV === "development") console.debug("[AuthProvider] refreshSession failed", err);
+      const message = err?.message ?? "Falha ao renovar sessão.";
+      setAuthError(message);
       setAccessToken(null);
       setUser(null);
       setStatus("unauthenticated");
@@ -49,24 +60,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(res.accessToken);
     setUser(res.user ?? null);
     setStatus("authenticated");
+    setAuthError(null);
   }, []);
 
   const signOut = useCallback(async () => {
     try {
-      await apiLogout();
+      await apiLogout(accessToken ?? undefined);
     } finally {
       setAccessToken(null);
       setUser(null);
       setStatus("unauthenticated");
+      setAuthError(null);
     }
-  }, []);
+  }, [accessToken]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, accessToken, user, signIn, signOut, refreshSession }),
-    [status, accessToken, user, signIn, signOut, refreshSession]
+    () => ({ status, accessToken, user, signIn, signOut, refreshSession, authError, clearAuthError }),
+    [status, accessToken, user, signIn, signOut, refreshSession, authError, clearAuthError]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuthContext() {

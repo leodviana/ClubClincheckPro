@@ -1,5 +1,3 @@
-import { Console } from "console";
-
 export type AuthUser = { id: string; nome?: string; email?: string; profile?: number };
 
 export type LoginResponse = {
@@ -35,6 +33,27 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
+
+function normalizeFetchError(err: unknown): Error {
+  if (err instanceof TypeError) {
+    return new Error(
+      "Não foi possível conectar ao servidor. Verifique sua conexão, a URL da API e as regras de CORS/HTTPS."
+    );
+  }
+
+  if (err instanceof Error) {
+    // Se vier mensagem muito técnica/longa, troca por genérica
+    if ((err.message || "").length > 200) {
+      return new Error("Ocorreu uma falha ao comunicar com o servidor.");
+    }
+    return err;
+  }
+
+  return new Error("Erro inesperado ao comunicar com o servidor.");
+}
+
+
+
 function normalizeAccessToken(payload: any): string {
   // Aceita variações de casing
   return (payload?.accessToken ?? payload?.AccessToken ?? payload?.acessToken ?? payload?.AcessToken ?? "").toString();
@@ -67,55 +86,69 @@ function normalizeUser(payload: any): AuthUser | undefined {
  * - Response: { accessToken, accessTokenExpiration, user }
  * - Server must set refresh cookie (HttpOnly; Secure; SameSite=None) for cross-domain.
  */
-export async function login(loginValue: string, senha: string, manterLogado: boolean): Promise<LoginResponse> {
-  const base = apiBase();
+export async function login(
+  loginValue: string,
+  senha: string,
+  manterLogado: boolean
+): Promise<LoginResponse> {
+  try {
+    const base = apiBase();
+    if (!base) {
+      throw new Error("NEXT_PUBLIC_API_URL não configurada.");
+    }
 
-  
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL não configurada.");
+    // 🔒 Endpoint único e explícito
+    const url = `${base}/api/Login/login`;
 
-  // Compatibilidade: padrão REST (/auth/login) e endpoint legado (/getLogin)
-  const candidates = [`${base}/Login/login`, `${base}/getLogin`];
+    const body = {
+      Login: loginValue,
+      senha,
+      manter_logado: manterLogado,
+    };
 
-  // Seu backend atual espera: { Login, senha, manter_logado }
-  const body = { Login: loginValue, senha, manter_logado: manterLogado };
-
-  let lastError = "";
-  let res: Response | null = null;
-
-  for (const url of candidates) {
-    console.log(url);
-    res = await fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(body),
     });
 
-    // Se o endpoint não existir, tenta o próximo.
-    if (res.status === 404) continue;
-
+    
     if (!res.ok) {
-      lastError = await readError(res);
-      // Para 400/401, não faz sentido tentar outro endpoint.
-      break;
+      // Endpoint errado / rota inexistente
+      if (res.status === 404 || res.status === 405) {
+       throw new Error("Problema na conexão com o servidor.");
+      }
+
+      const message = await readError(res);
+      throw new Error(message || "Falha ao realizar login.");
     }
 
-    break;
+
+    const data = await res.json();
+
+    const accessToken = normalizeAccessToken(data);
+    if (!accessToken) {
+      throw new Error("Resposta inválida do servidor.");
+    }
+
+    return {
+      accessToken,
+      accessTokenExpiration: normalizeAccessTokenExpiration(data),
+      user: normalizeUser(data),
+    };
+
+  } catch (err) {
+    // ✅ AQUI entra o tratamento de:
+    // - Failed to fetch
+    // - CORS
+    // - API offline
+    // - HTTPS inválido
+    throw normalizeFetchError(err);
   }
-
-  if (!res) throw new Error("Falha ao conectar com o backend.");
-  if (!res.ok) throw new Error(lastError || (await readError(res)));
-
-  const data = await res.json();
-  const accessToken = normalizeAccessToken(data);
-  if (!accessToken) throw new Error("Resposta de login sem accessToken.");
-
-  return {
-    accessToken,
-    accessTokenExpiration: normalizeAccessTokenExpiration(data),
-    user: normalizeUser(data),
-  };
 }
+
+
 
 /**
  * POST /auth/refresh
@@ -123,41 +156,81 @@ export async function login(loginValue: string, senha: string, manterLogado: boo
  * - Response: { accessToken, accessTokenExpiration }
  */
 export async function refresh(): Promise<RefreshResponse> {
-  const base = apiBase();
-  if (!base) throw new Error("API_URL não configurada.");
+  try {
+      const base = apiBase();
+      if (!base) throw new Error("API_URL não configurada.");
+        
+      const res = await fetch(`${base}/api/Login/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
 
-  const res = await fetch(`${base}/Login/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
+      // Dev-time debug para inspecionar corpo e status (ajuda a detectar CORS/cookie)
+      if (process.env.NODE_ENV === "development") {
+        try {
+          const clone = res.clone();
+          clone.text().then(text => console.debug("[auth-client] refresh res", res.status, text)).catch(() => console.debug("[auth-client] refresh res", res.status));
+        } catch {}
+      }
 
-  if (!res.ok) throw new Error(await readError(res));
+      if (!res.ok) {
+        if (res.status === 401) {
+          const msg = await readError(res);
+          throw new Error(`Refresh falhou (401). Possível refresh cookie ausente/expirado ou CORS impedindo envio do cookie. ${msg}`);
+        }
+        throw new Error(await readError(res));
+      }
 
-  const data = await res.json();
-  const accessToken = normalizeAccessToken(data);
-  if (!accessToken) throw new Error("Resposta de refresh sem accessToken.");
+      const data = await res.json();
+      const accessToken = normalizeAccessToken(data);
+      if (!accessToken) throw new Error("Resposta de refresh sem accessToken.");
 
-  return {
-    accessToken,
-    accessTokenExpiration: normalizeAccessTokenExpiration(data),
-  };
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[auth-client] refresh success, accessToken present");
+      }
+
+      return {
+        accessToken,
+        accessTokenExpiration: normalizeAccessTokenExpiration(data),
+      };
+  } catch (err) {
+    throw normalizeFetchError(err);
+  }
 }
 
 /**
  * POST /auth/logout
  * - Server should clear refresh cookie.
  */
-export async function logout(): Promise<void> {
-  const base = apiBase();
-  if (!base) return;
+export async function logout(token?: string): Promise<void> {
+  try {
+      const base = apiBase();
+      if (!base) return;
 
-  // Mesmo se falhar, o front pode limpar estado em memória.
-  await fetch(`${base}/Login/logout`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  }).catch(() => undefined);
+      // Mesmo se falhar, o front pode limpar estado em memória.
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      try {
+        const res = await fetch(`${base}/api/Login/logout`, {
+          method: "POST",
+          headers,
+          credentials: "include",
+        });
+
+        if (process.env.NODE_ENV === "development") {
+          try {
+            const clone = res.clone();
+            clone.text().then(text => console.debug("[auth-client] logout res", res.status, text)).catch(() => console.debug("[auth-client] logout res", res.status));
+          } catch {}
+        }
+      } catch {
+        // Ignorar falhas de rede no logout; front limpa estado em memória.
+      }
+  } catch (err) {
+    throw normalizeFetchError(err);
+  }
 }
 
 /**
@@ -165,18 +238,22 @@ export async function logout(): Promise<void> {
  * - Body: { email }
  */
 export async function requestPasswordReset(email: string): Promise<ForgotPasswordResponse> {
-  const base = apiBase();
+  try {
+      const base = apiBase();
 
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL não configurada.");
+      if (!base) throw new Error("NEXT_PUBLIC_API_URL não configurada.");
 
-  const res = await fetch(`${base}/auth/forgot-password`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ email }),
-  });
+      const res = await fetch(`${base}/api/Login/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email }),
+      });
 
-  if (!res.ok) throw new Error(await readError(res));
+      if (!res.ok) throw new Error(await readError(res));
 
-  return (await res.json()) as ForgotPasswordResponse;
+      return (await res.json()) as ForgotPasswordResponse;
+  } catch (err) {
+    throw normalizeFetchError(err);
+  }
 }
