@@ -33,8 +33,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async (): Promise<string | null> => {
     try {
+      if (process.env.NODE_ENV === "development") console.debug("[AuthProvider] refreshSession -> calling apiRefresh()");
       const res = await apiRefresh();
+      if (process.env.NODE_ENV === "development") console.debug("[AuthProvider] refreshSession -> success", { accessTokenPresent: !!res.accessToken });
       setAccessToken(res.accessToken);
+      // Tenta extrair informação do usuário a partir do payload do JWT quando disponível
+      try {
+        const parts = res.accessToken.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          const maybeUser: AuthUser | null = {
+            id: (payload?.sub ?? payload?.id ?? payload?.user_id ?? payload?.isn_usuario ?? payload?.uid ?? "").toString(),
+            nome: (payload?.nome ?? payload?.name ?? payload?.Nome ?? undefined) as string | undefined,
+            email: (payload?.email ?? payload?.Email ?? undefined) as string | undefined,
+            profile: (payload?.profile ?? payload?.Profile ?? undefined) as number | undefined,
+          };
+
+          if (maybeUser?.id) setUser(maybeUser);
+        }
+      } catch {
+        // se não conseguir decodificar, não quebra; mantém user como está (pode ser null)
+      }
       // endpoint /auth/refresh normalmente não retorna user; mantém o atual.
       setStatus("authenticated");
       setAuthError(null);

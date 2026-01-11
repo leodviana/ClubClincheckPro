@@ -33,6 +33,12 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
 
 function normalizeFetchError(err: unknown): Error {
   if (err instanceof TypeError) {
@@ -159,10 +165,28 @@ export async function refresh(): Promise<RefreshResponse> {
   try {
       const base = apiBase();
       if (!base) throw new Error("API_URL não configurada.");
-        
+
+      if (process.env.NODE_ENV === "development") {
+        console.debug(`[auth-client] refresh -> ${base}/api/Login/refresh (credentials: include)`);
+      }
+
+      const headers: Record<string,string> = { "Content-Type": "application/json" };
+
+      // Se existir cookie CSRF (double-submit), envie como header
+      const csrf = readCookie("XSRF-TOKEN") || readCookie("X-CSRF-TOKEN") || readCookie("csrf_token") || readCookie("csrf");
+      if (csrf) {
+        // Envia múltiplos nomes de header comuns para maior compatibilidade com servidores
+        headers["X-XSRF-TOKEN"] = csrf;
+        headers["X-CSRF-TOKEN"] = csrf;
+        headers["XSRF-TOKEN"] = csrf;
+        if (process.env.NODE_ENV === "development") console.debug("[auth-client] refresh -> sending CSRF headers", { csrfPresent: true });
+      } else {
+        if (process.env.NODE_ENV === "development") console.debug("[auth-client] refresh -> no CSRF cookie found");
+      }
+
       const res = await fetch(`${base}/api/Login/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         credentials: "include",
       });
 
@@ -170,8 +194,10 @@ export async function refresh(): Promise<RefreshResponse> {
       if (process.env.NODE_ENV === "development") {
         try {
           const clone = res.clone();
-          clone.text().then(text => console.debug("[auth-client] refresh res", res.status, text)).catch(() => console.debug("[auth-client] refresh res", res.status));
-        } catch {}
+          clone.text().then(text => console.debug("[auth-client] refresh res", { status: res.status, body: text })).catch(() => console.debug("[auth-client] refresh res", { status: res.status }));
+        } catch (e) {
+          console.debug("[auth-client] refresh res: clone failed", e);
+        }
       }
 
       if (!res.ok) {
