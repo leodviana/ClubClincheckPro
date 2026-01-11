@@ -30,14 +30,21 @@ export function useApi() {
     const base = apiBase();
     if (!base) throw new Error("NEXT_PUBLIC_API_URL não configurada.");
 
-    const res = await apiFetch(
-      `${base}${path.startsWith("/") ? path : `/${path}`}`,
-      options,
-      () => accessToken,
-      async () => {
-        return await refreshSession();
-      }
-    );
+    // Build URL avoiding duplicated path segments (e.g. base contains '/api' and
+    // path also starts with '/api' which would produce '/api/api/...'). We
+    // compare the pathname part of the base and strip it from the requested
+    // path when it repeats.
+    const baseUrl = new URL(base);
+    const basePath = baseUrl.pathname.replace(/\/$/, "") || "/";
+    let fullPath = path.startsWith("/") ? path : `/${path}`;
+    if (basePath !== "/" && fullPath.startsWith(basePath)) {
+      fullPath = fullPath.slice(basePath.length) || "/";
+    }
+    const url = `${base}${fullPath}`;
+
+    const res = await apiFetch(url, options, () => accessToken, async () => {
+      return await refreshSession();
+    });
 
     if (!res.ok) {
       const ct = res.headers.get("content-type") || "";
