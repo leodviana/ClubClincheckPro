@@ -33,9 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async (): Promise<string | null> => {
     try {
-      if (process.env.NODE_ENV === "development") console.debug("[AuthProvider] refreshSession -> calling apiRefresh()");
       const res = await apiRefresh();
-      if (process.env.NODE_ENV === "development") console.debug("[AuthProvider] refreshSession -> success", { accessTokenPresent: !!res.accessToken });
       setAccessToken(res.accessToken);
       // Tenta extrair informação do usuário a partir do payload do JWT quando disponível
       try {
@@ -59,7 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthError(null);
       return res.accessToken;
     } catch (err: any) {
-      if (process.env.NODE_ENV === "development") console.debug("[AuthProvider] refreshSession failed", err);
       const message = err?.message ?? "Falha ao renovar sessão.";
       setAuthError(message);
       setAccessToken(null);

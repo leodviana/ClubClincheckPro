@@ -1,16 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const sp = useSearchParams();
   const { signIn } = useAuth();
 
-  const nextUrl = useMemo(() => sp.get("next") || "/", [sp]);
+  const [nextUrl, setNextUrl] = useState("/");
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      setNextUrl(params.get("next") || "/");
+    } catch (e) {
+      setNextUrl("/");
+    }
+  }, []);
 
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");

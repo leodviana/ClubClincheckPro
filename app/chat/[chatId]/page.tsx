@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/hooks/useAuth";
@@ -51,6 +51,7 @@ type CaseData = {
   patientConcerns: string;
   doctorComments: string;
   clinicalNotes: string;
+  treatmentLimitations?: string;
 };
 
 function normalizeCreatedAt(raw: any): string {
@@ -102,7 +103,16 @@ const initialCaseData: CaseData = {
   patientConcerns: "",
   doctorComments: "",
   clinicalNotes: "",
+  treatmentLimitations: "",
 };
+
+function looksLikeMessage(it: any): boolean {
+  if (!it) return false;
+  if (it.content || it.text || it.message || it.body || it.url) return true;
+  if (it.type || it.message_type || it.tipo) return true;
+  if (it.createdAt || it.created_at || it.timestamp || it.dt_criacao) return true;
+  return false;
+}
 
 export default function ChatPage() {
   const params = useParams();
@@ -110,7 +120,9 @@ export default function ChatPage() {
 
   const [status, setStatus] = useState<ChatStatus | null>(null); // carregado do backend
   const [unlockFormDone, setUnlockFormDone] = useState(false);
-  const isBlocked = status === "encerrado" && !unlockFormDone;
+  // null = not yet checked, true = case exists, false = no case (blocked)
+  const [caseExists, setCaseExists] = useState<boolean | null>(null);
+  const isBlocked = caseExists === false;
 
   // cannotSend is computed later after `user` is available
 
@@ -121,22 +133,17 @@ export default function ChatPage() {
   const undoTimerRef = useRef<number | null>(null);
 
   const [caseData, setCaseData] = useState<CaseData>(initialCaseData);
+  const [confirmChecked, setConfirmChecked] = useState(false);
+  const [submittingCase, setSubmittingCase] = useState(false);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
-  const searchParams = useSearchParams();
-  const routedKey = searchParams?.get("key");
-  const routedChatNo = searchParams?.get("chatNo");
-  const routedStatusKey = searchParams?.get("statusKey");
-  const routedStatusLabel = searchParams?.get("statusLabel");
-  const [routedStatusLabelState, setRoutedStatusLabelState] = useState<string | null>(routedStatusLabel ?? null);
-  const [optimisticStatusFromMeta, setOptimisticStatusFromMeta] = useState(false);
+  // Ignore route-level params passed from cards; rely only on `chatId`.
+  const routedKey: string | null = null;
+  const routedChatNo: string | null = null;
+  const routedStatusKey: string | null = null;
+  const routedStatusLabel: string | null = null;
+  const [routedStatusLabelState, setRoutedStatusLabelState] = useState<string | null>(null);
 
-  // If a routed label or key is present from the params, treat it as an optimistic
-  // source of truth so the backend load doesn't override the UI label/status.
-  useEffect(() => {
-    if ((routedStatusLabelState && String(routedStatusLabelState).trim() !== "") || routedStatusKey) {
-      setOptimisticStatusFromMeta(true);
-    }
-  }, [routedStatusLabelState, routedStatusKey]);
+  // No optimistic route-derived status is used; rely on backend/status state only.
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -149,7 +156,7 @@ export default function ChatPage() {
   ]);
   const [text, setText] = useState("");
   const { fetchJson } = useApi();
-  const { user } = useAuth();
+  const { user, status: authStatus, accessToken } = useAuth();
   
   function isAdminUser(u: any) {
     if (!u) return false;
@@ -185,11 +192,11 @@ export default function ChatPage() {
     if (routedStatusLabelState) {
       const low = String(routedStatusLabelState).toLowerCase();
       if (low.includes("encerr") || low.includes("fech") || low.includes("final")) return "Encerrado";
-      if (low.includes("abert")) return "Em aberto";
+      if (low.includes("abert")) return "Aberto";
       return String(routedStatusLabelState);
     }
     if (status === null) return "Carregando...";
-    if (status === "aberto") return "Em aberto";
+    if (status === "aberto") return "Aberto";
     if (status === "encerrado") return "Encerrado";
     return "Encerrado";
   }, [status, routedStatusLabelState]);
@@ -216,48 +223,9 @@ export default function ChatPage() {
 
   const showSendControls = !isLabelEncerrado();
 
-  // Read metadata from sessionStorage when available (used instead of query params).
-  useEffect(() => {
-    if (!chatId) return;
-    // If route already provided label/key, prefer it.
-    if (routedStatusKey || routedStatusLabel) return;
-    try {
-      const raw = sessionStorage.getItem(`chat.meta.${chatId}`);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
-      if (!obj) return;
-      // respect expiration
-      if (obj.expiresAt && Number(obj.expiresAt) < Date.now()) {
-        sessionStorage.removeItem(`chat.meta.${chatId}`);
-        return;
-      }
-        if (obj.statusLabel) {
-          setRoutedStatusLabelState(String(obj.statusLabel));
-        }
-        if (obj.statusKey && status === null) {
-          const k = String(obj.statusKey).toLowerCase();
-          if (k === "aberto" || k === "encerrado" || k === "finalizado" || k === "nao_iniciado") {
-            setStatus(k as ChatStatus);
-            setOptimisticStatusFromMeta(true);
-          }
-        }
-      // remove after reading so it doesn't leak to future navigations
-      sessionStorage.removeItem(`chat.meta.${chatId}`);
-    } catch (e) {
-      // ignore JSON/session errors
-    }
-  }, [chatId, routedStatusKey, routedStatusLabel, status]);
+  // No session/query metadata applied — rely on chatId and backend for status.
 
-  // If the route provided a statusKey (from UserCredits), use it as an initial
-  // optimistic status until the backend load overrides it.
-  useEffect(() => {
-    if (!routedStatusKey) return;
-    if (status !== null) return; // don't clobber backend-derived status
-    const k = String(routedStatusKey).toLowerCase();
-    if (k === "aberto" || k === "encerrado" || k === "nao_iniciado") {
-      setStatus(k as ChatStatus);
-    }
-  }, [routedStatusKey, status]);
+  // No route-provided statusKey is consumed; status comes from backend.
 
   function isSendBlocked() {
     const isAdmin = isAdminUser(user);
@@ -389,6 +357,8 @@ export default function ChatPage() {
         setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, pending: false, failed: true } : m)));
       }
     })();
+
+        
   }
 
   // Retry sending a failed message
@@ -483,9 +453,8 @@ export default function ChatPage() {
       } catch (e) {
         // ignore
       }
-      // force optimistic visible label update so UI shows send controls immediately
+      // update label and status to reflect opened chat
       setRoutedStatusLabelState("Em aberto");
-      setOptimisticStatusFromMeta(false);
       setStatus("aberto");
       setRefreshKey((k) => k + 1);
     } catch (err: any) {
@@ -657,34 +626,52 @@ export default function ChatPage() {
   // Carrega mensagens do backend ao entrar na tela / ao mudar de chatId
   useEffect(() => {
     if (!chatId) return;
-
+    // Wait until auth initialization completes to avoid duplicate runs
+    if (authStatus === "loading") return;
     let mounted = true;
+
     async function loadMessages() {
       setLoadingMessages(true);
       setMessagesError(null);
-      // limpa mensagens anteriores
       setMessages([]);
 
       try {
-        // Primeiro tentamos obter o próprio chat, pois ele pode conter o
-        // `status` e um array `messages`. Se não houver, buscamos o
-        // endpoint `/api/chats/{chatId}/messages`.
+        // fetch chat meta
         let data: any = null;
         try {
           data = await fetchJson<any>(`/api/chats/${chatId}`);
-        } catch (err) {
+          
+        } catch (e) {
           data = null;
+          
         }
 
-        // extract chat title from possible fields
-        if (data) {
-          const titleCandidate = data?.title ?? data?.name ?? data?.caseTitle ?? data?.title_chat ?? data?.subject ?? data?.chatTitle ?? data?.titulo ?? null;
+        // prefer messages endpoint if available
+        let forcedMsgs: any[] | null = null;
+        try {
+          const forced = await fetchJson<any>(`/api/chats/${chatId}/messages`);
+          forcedMsgs = Array.isArray(forced) ? forced : forced?.messages ?? forced?.data ?? null;
+          
+        } catch (e) {
+          forcedMsgs = null;
+          
+        }
+
+        // determine chat meta
+        let chatMeta: any = null;
+        if (!data) chatMeta = null;
+        else if (Array.isArray(data) && data.length > 0) chatMeta = data[0];
+        else if (data?.data && Array.isArray(data.data) && data.data.length > 0) chatMeta = data.data[0];
+        else chatMeta = data;
+
+        // set title
+        if (chatMeta) {
+          const titleCandidate = chatMeta?.title ?? chatMeta?.name ?? chatMeta?.caseTitle ?? chatMeta?.title_chat ?? chatMeta?.subject ?? chatMeta?.chatTitle ?? chatMeta?.titulo ?? null;
           if (titleCandidate) setChatTitle(String(titleCandidate));
         }
 
-        // Decide status using only the backend `status` field (numeric or textual).
-        // Parse to a canonical chatStatus and respect optimistic meta when present.
-        function parseStatus(raw: any): ChatStatus | null {
+        // parse status
+        const parseStatus = (raw: any): ChatStatus | null => {
           if (raw == null) return null;
           if (typeof raw === "number" || /^\d+$/.test(String(raw))) {
             const n = Number(raw);
@@ -697,59 +684,74 @@ export default function ChatPage() {
           if (s.includes("clos") || s.includes("fech") || s.includes("encerr")) return "encerrado";
           if (s.includes("lock") || s.includes("bloq") || s.includes("final")) return "encerrado";
           return null;
-        }
+        };
 
-        const rawStatus = data?.status ?? data?.Status ?? data?.state ?? null;
+        const rawStatus = chatMeta?.status ?? chatMeta?.Status ?? chatMeta?.state ?? null;
         const chatStatus = parseStatus(rawStatus);
-        if (chatStatus) {
-          if (!optimisticStatusFromMeta) setStatus(chatStatus);
-        } else {
-          if (!optimisticStatusFromMeta) setStatus("nao_iniciado");
-        }
+        if (chatStatus) setStatus(chatStatus);
 
-        // derive lista de mensagens
+        // assemble message list
+        // Prefer `forcedMsgs` when the dedicated messages endpoint returned data —
+        // some backends return an object-shaped `data` from `/api/chats/{id}` that
+        // superficially looks like a message (e.g. contains `content`/`createdAt`)
+        // and can incorrectly be treated as the messages array. Use the explicit
+        // messages endpoint first to avoid mapping chat meta as a message.
         let list: any[] = [];
-        if (data) {
-          list = Array.isArray(data) ? data : data?.messages ?? data?.data ?? [];
-        }
 
-        // se não obtemos mensagens do endpoint /api/chats/{chatId}, faça o fallback
-        if (!list || list.length === 0) {
-          try {
-            const msgs = await fetchJson<any>(`/api/chats/${chatId}/messages`);
-            list = Array.isArray(msgs) ? msgs : msgs?.messages ?? msgs?.data ?? [];
-          } catch (err) {
-            throw err;
+        const looksLikeMessage = (it: any) => {
+          if (!it) return false;
+          if (it.content || it.text || it.message || it.body || it.url) return true;
+          if (it.type || it.message_type || it.tipo) return true;
+          if (it.createdAt || it.created_at || it.timestamp || it.dt_criacao) return true;
+          return false;
+        };
+
+        // 1) prefer explicit forced messages from the dedicated endpoint
+        if (forcedMsgs && Array.isArray(forcedMsgs) && forcedMsgs.length > 0) {
+          list = forcedMsgs;
+        } else {
+          // 2) try candidate arrays from `/api/chats/{id}` response
+          const candidateFromData = Array.isArray(data) ? data : data?.messages ?? data?.data ?? [];
+          if (Array.isArray(candidateFromData) && candidateFromData.length > 0 && looksLikeMessage(candidateFromData[0])) {
+            list = candidateFromData;
+          }
+
+          // 3) try arrays nested in chatMeta
+          if ((!list || list.length === 0) && chatMeta && typeof chatMeta === "object") {
+            for (const k of Object.keys(chatMeta)) {
+              const v = (chatMeta as any)[k];
+              if (Array.isArray(v) && v.length > 0 && looksLikeMessage(v[0])) {
+                list = v;
+                break;
+              }
+            }
           }
         }
+
+        // No extra fallback fetch: prefer `forcedMsgs` (messages endpoint) and
+        // fall back to arrays found in `/api/chats/{id}` meta only when empty.
 
         if (!mounted) return;
 
         const mapped: Message[] = (list || []).map((it: any) => {
           const id = (it.id ?? it.message_id ?? it.isn_mensagem ?? it.uuid ?? crypto.randomUUID()).toString();
-
-          // from: numeric code or actual sender id from backend
           let from: Message["from"] = "admin";
           const rawFrom = it.from ?? it.sender ?? it.from_user ?? it.user_id ?? null;
           let senderId: string | number | undefined = undefined;
           let isPalette = false;
 
           if (typeof rawFrom === "number") {
-            // se rawFrom coincide com os códigos de role, trate como role
-            if (rawFrom === FROM_USER_VALUE) {
-              from = "user";
-            } else if (FROM_ADMIN_VALUES.includes(rawFrom)) {
+            if (rawFrom === FROM_USER_VALUE) from = "user";
+            else if (FROM_ADMIN_VALUES.includes(rawFrom)) {
               from = "admin";
               if (rawFrom === 3) isPalette = true;
             } else {
-              // caso seja um id numérico do usuário, armazene como senderId
               senderId = rawFrom;
               if (user?.id && rawFrom.toString() === user.id.toString()) from = "user";
             }
           } else if (typeof rawFrom === "string") {
             senderId = rawFrom;
             if (user?.id && rawFrom === user.id.toString()) from = "user";
-            // tentativa simples: se rawFrom for 'user'/'admin'
             if (!senderId) {
               const r = rawFrom.toLowerCase();
               if (r === "user" || r === "paciente" || r === "cliente") from = "user";
@@ -757,15 +759,43 @@ export default function ChatPage() {
             }
           }
 
+          // Additional palette detection: some backends return flags like
+          // `isPalette`, `is_palette`, `profile`, `sender_profile`, `admin_color` etc.
+          // Preserve style rule: messages from users are white; admin messages may use palette.
+          if (from === "user") {
+            isPalette = false;
+          } else if (from === "admin") {
+            const paletteCandidates = [
+              it.isPalette,
+              it.is_palette,
+              it.palette,
+              it.sender_profile,
+              it.profile,
+              it.profile_id,
+              it.admin_color,
+              it.color,
+            ];
+            for (const cand of paletteCandidates) {
+              if (cand == null) continue;
+              // numeric 3 -> palette (keeps existing behavior)
+              if (typeof cand === "number" && cand === 3) {
+                isPalette = true;
+                break;
+              }
+              const s = String(cand).toLowerCase();
+              if (s === "3" || s === "true" || s.includes("palette") || s.includes("pink") || s.includes("magenta") || s.includes("brand")) {
+                isPalette = true;
+                break;
+              }
+            }
+          }
+
           const content = it.content ?? it.text ?? it.message ?? it.body ?? it.url ?? "";
 
-          // type: backend may use numeric codes; map to local types
           const rawType = it.type ?? it.tipo ?? it.message_type ?? null;
           let type: Message["type"] = "text";
-          if (typeof rawType === "number") {
-            type = TYPE_MAP_IN[rawType] ?? "text";
-          } else if (typeof rawType === "string") {
-            // tentar inferir por mimetype ou palavras-chave
+          if (typeof rawType === "number") type = TYPE_MAP_IN[rawType] ?? "text";
+          else if (typeof rawType === "string") {
             if (rawType.includes("image") || rawType === "image") type = "image";
             else if (rawType.includes("audio") || rawType === "audio") type = "audio";
             else if (rawType.includes("video") || rawType === "video") type = "video";
@@ -777,14 +807,40 @@ export default function ChatPage() {
           return { id, from, type, content, createdAt, senderId, isPalette } as Message;
         });
 
+        
         setMessages(mapped);
+
+        // try load case data
+        try {
+          if (chatId) {
+            const caseRes = await fetchJson<any>(`/api/chats/${chatId}/case`);
+            const caseObj = Array.isArray(caseRes) ? caseRes[0] : caseRes?.data ?? caseRes;
+            if (caseObj && (caseObj.patientName || caseObj.patient_name || caseObj.name)) {
+              setCaseData((prev) => ({
+                patientName: caseObj.patientName ?? caseObj.patient_name ?? caseObj.name ?? prev.patientName,
+                diagnostic: caseObj.diagnostic ?? caseObj.diagnose ?? caseObj.diagnostico ?? prev.diagnostic,
+                treatmentPlan: caseObj.treatmentPlan ?? caseObj.treatment_plan ?? caseObj.plano ?? prev.treatmentPlan,
+                doubts: caseObj.doubts ?? caseObj.duvidas ?? caseObj.questions ?? prev.doubts,
+                objective: caseObj.objective ?? caseObj.objetivo ?? prev.objective,
+                patientConcerns: caseObj.patientConcerns ?? caseObj.patient_concerns ?? prev.patientConcerns,
+                doctorComments: caseObj.doctorComments ?? caseObj.doctor_comments ?? prev.doctorComments,
+                clinicalNotes: caseObj.clinicalNotes ?? caseObj.clinical_notes ?? prev.clinicalNotes,
+              }));
+              setCaseExists(true);
+            } else {
+              // explicit null/no-case response -> block chat until case submitted
+              setCaseExists(false);
+            }
+          }
+        } catch (e) {
+          // on error, keep caseExists as null (do not block)
+        }
       } catch (err: any) {
         console.error("failed to load messages", err);
         setMessagesError(err?.message ?? "Erro ao carregar mensagens");
         setMessages([]);
       } finally {
         if (mounted) setLoadingMessages(false);
-        // pequena espera para rolar após render
         requestAnimationFrame(scrollToBottom);
       }
     }
@@ -794,12 +850,9 @@ export default function ChatPage() {
     return () => {
       mounted = false;
     };
-    loadMessages();
+  }, [chatId, authStatus, refreshKey]);
 
-    return () => {
-      mounted = false;
-    };
-  }, [chatId, user?.id, refreshKey]);
+  // (case auto-load removed — revert to previous behavior)
 
   function onScroll() {
     if (!listRef.current) return;
@@ -811,16 +864,71 @@ export default function ChatPage() {
     setCaseData((prev) => ({ ...prev, [field]: value }));
   }
 
-  function submitUnlock(e: React.FormEvent) {
+  async function submitUnlock(e: React.FormEvent) {
     e.preventDefault();
 
     // validação mínima
+    if (!confirmChecked) return alert("Confirme que as informações estão corretas.");
     if (!caseData.objective.trim()) return alert("Informe o objetivo geral do tratamento.");
     if (!caseData.patientConcerns.trim()) return alert("Informe as queixas do paciente.");
     if (!caseData.doctorComments.trim()) return alert("Informe os comentários do dentista.");
 
-    setUnlockFormDone(true);
-    setStatus("aberto");
+    if (!chatId) return alert("Chat inválido");
+
+    setMessagesError(null);
+    try {
+      setSubmittingCase(true);
+
+      // Build payload dynamically from caseData so any added fields are included.
+      const payload: any = {
+        confirmed: !!confirmChecked,
+        confirmed_by: user?.id ?? null,
+        // include chat/session info (session is accessToken)
+        chatId: chatId,
+        chat_id: chatId,
+        session: (accessToken ?? null),
+        session_token: (accessToken ?? null),
+      };
+
+      // helper: convert camelCase to snake_case
+      const camelToSnake = (s: string) => s.replace(/([A-Z])/g, "_$1").toLowerCase();
+
+      for (const [k, v] of Object.entries(caseData)) {
+        payload[k] = v;
+        const snake = camelToSnake(k);
+        // don't override existing keys like confirmed_by
+        if (!(snake in payload)) payload[snake] = v;
+      }
+
+      // Additional name mappings requested:
+      // include `diagnosis` (alias for `diagnostic`) and mainConcerns/main_concerns
+      if (caseData.diagnostic !== undefined) {
+        payload.diagnosis = caseData.diagnostic;
+        if (!("diagnosis" in payload)) payload.diagnosis = caseData.diagnostic;
+        if (!("diagnosis" in payload)) payload["diagnosis"] = caseData.diagnostic;
+      }
+      if (caseData.patientConcerns !== undefined) {
+        payload.mainConcerns = caseData.patientConcerns;
+        payload.main_concerns = caseData.patientConcerns;
+      }
+
+      await fetchJson<any>(`/api/chats/${chatId}/case`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      // On success, mark as unlocked locally and update status to aberto
+      setUnlockFormDone(true);
+      setCaseExists(true);
+      setStatus("aberto");
+      setRefreshKey((k) => k + 1);
+    } catch (err: any) {
+      console.error("failed to submit case", err);
+      alert("Não foi possível enviar os dados do caso: " + (err?.message ?? err));
+    } finally {
+      setSubmittingCase(false);
+    }
   }
 
   return (
@@ -876,6 +984,8 @@ export default function ChatPage() {
               <span className="text-xs text-muted">({undoCountdown}s)</span>
             </div>
           )}
+
+          
         </div>
 
         <div
@@ -887,6 +997,13 @@ export default function ChatPage() {
               "radial-gradient(circle at 10% 20%, rgba(255,42,149,0.04) 0%, rgba(243,244,246,1) 35%), radial-gradient(circle at 90% 80%, rgba(59,130,246,0.06) 0%, rgba(243,244,246,1) 45%)",
           }}
         >
+            {messagesError && (
+              <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-100 text-sm text-red-700">
+                Erro ao carregar mensagens: {messagesError}
+              </div>
+            )}
+
+            
           {messages.map((m) => (
             <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
               <div
@@ -1067,6 +1184,7 @@ export default function ChatPage() {
                   onClick={() => {
                     setUnlockFormDone(false);
                     setStatus("encerrado");
+                    setCaseExists(false);
                   }}
                 >
                   Testar bloqueio
@@ -1079,7 +1197,7 @@ export default function ChatPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40" />
 
-          <Card className="relative w-full max-w-3xl bg-white border p-0 overflow-hidden rounded-2xl">
+          <Card className="relative w-full max-w-5xl bg-white border p-0 overflow-hidden rounded-2xl">
             <div className="p-5 border-b flex items-center justify-between">
               <div>
                 <h3 className="font-semibold">Formulário obrigatório</h3>
@@ -1095,95 +1213,125 @@ export default function ChatPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-              {/* Informações (lado esquerdo) */}
-              <div className="p-5 bg-slate-50 border-b md:border-b-0 md:border-r">
-                <h4 className="font-medium mb-3">Dados do caso</h4>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted">Paciente:</span>
-                    <span className="font-medium">{caseData.patientName}</span>
+            <div className="p-5 overflow-y-auto max-h-[80vh]">
+              {/* Formulário (full-width) - rolável e campos horizontais */}
+              <form onSubmit={submitUnlock} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-muted">Paciente</label>
+                    <Input
+                      value={caseData.patientName}
+                      onChange={(e) => handleCaseChange("patientName", e.target.value)}
+                      placeholder="Nome do paciente"
+                      className="mt-1 w-full text-sm py-2"
+                    />
                   </div>
 
-                  <div className="flex justify-between">
-                    <span className="text-muted">Diagnóstico:</span>
-                    <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs">
-                      {caseData.diagnostic}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-muted">Plano:</span>
-                    <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs">
-                      {caseData.treatmentPlan}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-muted">Dúvidas:</span>
-                    <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs">
-                      {caseData.doubts}
-                    </span>
+                  <div>
+                    <label className="text-xs text-muted">Diagnóstico</label>
+                    <Input
+                      value={caseData.diagnostic}
+                      onChange={(e) => handleCaseChange("diagnostic", e.target.value)}
+                      placeholder="Diagnóstico"
+                      className="mt-1 w-full text-sm py-2"
+                    />
                   </div>
                 </div>
 
-                <div className="mt-4 text-xs text-muted">
-                  Observação: após envio do formulário, este chat será liberado automaticamente.
-                </div>
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-muted">Plano de tratamento</label>
+                    <Input
+                      value={caseData.treatmentPlan}
+                      onChange={(e) => handleCaseChange("treatmentPlan", e.target.value)}
+                      placeholder="Ex: Distalização / Mesialização"
+                      className="mt-1 w-full text-sm py-2"
+                    />
+                  </div>
 
-              {/* Formulário (lado direito) */}
-              <form onSubmit={submitUnlock} className="p-5 space-y-3">
+                  <div>
+                    <label className="text-xs text-muted">Dúvidas principais</label>
+                    <Input
+                      value={caseData.doubts}
+                      onChange={(e) => handleCaseChange("doubts", e.target.value)}
+                      placeholder="Ex: periodonto, ancoragem..."
+                      className="mt-1 w-full text-sm py-2"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-xs text-muted">Objetivo geral do tratamento</label>
-                  <Input
+                  <textarea
                     value={caseData.objective}
                     onChange={(e) => handleCaseChange("objective", e.target.value)}
-                    placeholder="Descreva o objetivo geral do tratamento"
-                    className="mt-1 w-full"
+                    placeholder="Descreva o objetivo geral do tratamento..."
+                    className="mt-1 w-full rounded-lg border p-3 h-36 resize-none"
                   />
                 </div>
 
-                <div>
-                  <label className="text-xs text-muted">Queixas do paciente</label>
-                  <Input
-                    value={caseData.patientConcerns}
-                    onChange={(e) => handleCaseChange("patientConcerns", e.target.value)}
-                    placeholder="Ex: arco estreito, apinhamento, estética..."
-                    className="mt-1 w-full"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-muted">Principais preocupações do paciente</label>
+                    <textarea
+                      value={caseData.patientConcerns}
+                      onChange={(e) => handleCaseChange("patientConcerns", e.target.value)}
+                      placeholder="Ex: Arco estreito, apinhamento, outros..."
+                      className="mt-1 w-full rounded-lg border p-3 h-28 resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted">Comentários do doutor</label>
+                    <textarea
+                      value={caseData.doctorComments}
+                      onChange={(e) => handleCaseChange("doctorComments", e.target.value)}
+                      placeholder="Ex: a queixa da paciente é..."
+                      className="mt-1 w-full rounded-lg border p-3 h-28 resize-none"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-xs text-muted">Comentários do dentista</label>
-                  <Input
-                    value={caseData.doctorComments}
-                    onChange={(e) => handleCaseChange("doctorComments", e.target.value)}
-                    placeholder="Ex: prioridade em distalização, ancoragem..."
-                    className="mt-1 w-full"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-muted">Considerações clínicas (opcional)</label>
+                    <textarea
+                      value={caseData.clinicalNotes}
+                      onChange={(e) => handleCaseChange("clinicalNotes", e.target.value)}
+                      placeholder="Ex: periodonto, perda óssea, gengiva fina..."
+                      className="mt-1 w-full rounded-lg border p-3 h-24 resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted">Limitações do plano de tratamento (opcional)</label>
+                    <textarea
+                      value={caseData.treatmentLimitations}
+                      onChange={(e) => handleCaseChange("treatmentLimitations", e.target.value)}
+                      placeholder="Ex: tempo, cooperação do paciente..."
+                      className="mt-1 w-full rounded-lg border p-3 h-24 resize-none"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-xs text-muted">Observações clínicas (opcional)</label>
-                  <Input
-                    value={caseData.clinicalNotes}
-                    onChange={(e) => handleCaseChange("clinicalNotes", e.target.value)}
-                    placeholder="Ex: periodonto, perda óssea, gengiva fina..."
-                    className="mt-1 w-full"
-                  />
-                </div>
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <label className="flex items-center gap-2 text-sm text-muted">
+                    <input type="checkbox" checked={confirmChecked} onChange={(e) => setConfirmChecked(e.target.checked)} className="h-4 w-4" />
+                    <span className="text-sm">Confirmo que as informações estão corretas.</span>
+                  </label>
 
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    className="text-sm px-4 py-2 rounded-2xl border bg-white hover:bg-slate-50"
-                    onClick={() => alert("Este chat está finalizado. Você precisa enviar o formulário para liberar.")}
-                  >
-                    Cancelar
-                  </button>
-                  <Button type="submit">Liberar chat</Button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="text-sm px-4 py-2 rounded-2xl border bg-white hover:bg-slate-50"
+                      onClick={() => alert("Este chat está finalizado. Você precisa enviar o formulário para liberar.")}
+                    >
+                      Cancelar
+                    </button>
+                    <Button type="submit" disabled={!confirmChecked || submittingCase} className="bg-brand-blue text-white px-6 py-2">
+                      {submittingCase ? "Enviando..." : "Enviar e liberar chat"}
+                    </Button>
+                  </div>
                 </div>
               </form>
             </div>

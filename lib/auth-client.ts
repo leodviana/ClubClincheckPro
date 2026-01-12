@@ -166,9 +166,7 @@ export async function refresh(): Promise<RefreshResponse> {
       const base = apiBase();
       if (!base) throw new Error("API_URL não configurada.");
 
-      if (process.env.NODE_ENV === "development") {
-        console.debug(`[auth-client] refresh -> ${base}/api/Login/refresh (credentials: include)`);
-      }
+      
 
       const headers: Record<string,string> = { "Content-Type": "application/json" };
 
@@ -179,9 +177,9 @@ export async function refresh(): Promise<RefreshResponse> {
         headers["X-XSRF-TOKEN"] = csrf;
         headers["X-CSRF-TOKEN"] = csrf;
         headers["XSRF-TOKEN"] = csrf;
-        if (process.env.NODE_ENV === "development") console.debug("[auth-client] refresh -> sending CSRF headers", { csrfPresent: true });
+        
       } else {
-        if (process.env.NODE_ENV === "development") console.debug("[auth-client] refresh -> no CSRF cookie found");
+        
       }
 
       const res = await fetch(`${base}/api/Login/refresh`, {
@@ -190,15 +188,7 @@ export async function refresh(): Promise<RefreshResponse> {
         credentials: "include",
       });
 
-      // Dev-time debug para inspecionar corpo e status (ajuda a detectar CORS/cookie)
-      if (process.env.NODE_ENV === "development") {
-        try {
-          const clone = res.clone();
-          clone.text().then(text => console.debug("[auth-client] refresh res", { status: res.status, body: text })).catch(() => console.debug("[auth-client] refresh res", { status: res.status }));
-        } catch (e) {
-          console.debug("[auth-client] refresh res: clone failed", e);
-        }
-      }
+      // Dev-time debug removed
 
       if (!res.ok) {
         if (res.status === 401) {
@@ -212,9 +202,7 @@ export async function refresh(): Promise<RefreshResponse> {
       const accessToken = normalizeAccessToken(data);
       if (!accessToken) throw new Error("Resposta de refresh sem accessToken.");
 
-      if (process.env.NODE_ENV === "development") {
-        console.debug("[auth-client] refresh success, accessToken present");
-      }
+      
 
       return {
         accessToken,
@@ -245,12 +233,7 @@ export async function logout(token?: string): Promise<void> {
           credentials: "include",
         });
 
-        if (process.env.NODE_ENV === "development") {
-          try {
-            const clone = res.clone();
-            clone.text().then(text => console.debug("[auth-client] logout res", res.status, text)).catch(() => console.debug("[auth-client] logout res", res.status));
-          } catch {}
-        }
+        
       } catch {
         // Ignorar falhas de rede no logout; front limpa estado em memória.
       }
