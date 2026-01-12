@@ -1204,13 +1204,7 @@ export default function ChatPage() {
                 <p className="text-sm text-muted">Preencha para liberar o chat.</p>
               </div>
 
-              <button
-                className="text-sm text-muted hover:text-text"
-                onClick={() => alert("Este chat está finalizado. Preencha o formulário para liberar.")}
-                type="button"
-              >
-                Ajuda
-              </button>
+ 
             </div>
 
             <div className="p-5 overflow-y-auto max-h-[80vh]">
