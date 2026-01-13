@@ -34,10 +34,11 @@ export default function ChangePasswordForm({ onClose }: { onClose?: () => void }
     setOkMessage(null);
     setSubmitting(true);
     try {
+      const email = (user && (user.email || (user as any).nome)) || "";
       const res = await fetch("/api/Login/resetPassword", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user?.email ?? user?.name ?? "", newpassword: newPwd }),
+        body: JSON.stringify({ email, newpassword: newPwd }),
       });
 
       const text = await res.text();
@@ -84,7 +85,7 @@ export default function ChangePasswordForm({ onClose }: { onClose?: () => void }
         <form onSubmit={submitChange} className="space-y-3">
           <div>
             <label className="text-xs text-muted">Usuário</label>
-            <div className="mt-1 text-sm font-medium">{user?.email ?? user?.name ?? "—"}</div>
+            <div className="mt-1 text-sm font-medium">{user?.email ?? (user as any)?.nome ?? "—"}</div>
           </div>
 
           {/* removed old password field as requested */}

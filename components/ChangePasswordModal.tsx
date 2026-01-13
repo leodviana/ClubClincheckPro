@@ -55,7 +55,7 @@ export default function ChangePasswordModal() {
             <form onSubmit={submitChange} className="space-y-3">
               <div>
                 <label className="text-xs text-muted">Usuário</label>
-                <div className="mt-1 text-sm font-medium">{user?.email ?? user?.name ?? "—"}</div>
+                <div className="mt-1 text-sm font-medium">{user?.email ?? (user as any)?.nome ?? "—"}</div>
               </div>
 
               <div>
