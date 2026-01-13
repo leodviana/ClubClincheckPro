@@ -45,7 +45,6 @@ type CaseData = {
   patientName: string;
   diagnostic: string;
   treatmentPlan: string;
-  doubts: string;
 
   objective: string;
   patientConcerns: string;
@@ -97,7 +96,6 @@ const initialCaseData: CaseData = {
   patientName: "",
   diagnostic: "",
   treatmentPlan: "",
-  doubts: "",
 
   objective: "",
   patientConcerns: "",
@@ -137,8 +135,7 @@ export default function ChatPage() {
     patientName: "",
     diagnostic: "",
     treatmentPlan: "",
-    doubts: "",
-
+    
     objective: "",
     patientConcerns: "",
     doctorComments: "",
@@ -837,14 +834,16 @@ export default function ChatPage() {
                 "PatientName",
                 "Patient_Name",
                 "diagnostic",
+                "diagnosis",
+                "diagnóstico",
+                "Diagnóstico",
                 "Diagnosis",
                 "diagnose",
                 "diagnostico",
                 "treatmentPlan",
                 "treatment_plan",
                 "TreatmentPlan",
-                "doubts",
-                "duvidas",
+                
                 "questions",
                 "objective",
                 "ObjectiveGeneral",
@@ -882,10 +881,10 @@ export default function ChatPage() {
                 patientName:
                   caseObj.patientName ?? caseObj.PatientName ?? caseObj.patient_name ?? caseObj.name ?? caseData.patientName,
                 diagnostic:
-                  caseObj.diagnostic ?? caseObj.Diagnosis ?? caseObj.diagnose ?? caseObj.diagnostico ?? caseData.diagnostic,
+                  caseObj.diagnostic ?? caseObj.diagnosis ?? caseObj.Diagnosis ?? caseObj.diagnose ?? caseObj.diagnostico ?? caseObj["diagnóstico"] ?? caseObj["Diagnóstico"] ?? caseData.diagnostic,
                 treatmentPlan:
                   caseObj.treatmentPlan ?? caseObj.TreatmentPlan ?? caseObj.treatment_plan ?? caseObj.plano ?? caseData.treatmentPlan,
-                doubts: caseObj.doubts ?? caseObj.duvidas ?? caseObj.questions ?? caseData.doubts,
+                
                 objective: pickNonEmpty(caseObj, [
                   "objective",
                   "ObjectiveGeneral",
@@ -922,6 +921,12 @@ export default function ChatPage() {
               setCaseData(mapped);
               setCaseExists(true);
 
+              if (!mapped.diagnostic || String(mapped.diagnostic).trim() === "") {
+                try {
+                  // eslint-disable-next-line no-console
+                  console.warn("caseObj keys (diagnostic missing):", Object.keys(caseObj), "caseObj:", caseObj);
+                } catch (e) {}
+              }
               if (!mapped.objective || String(mapped.objective).trim() === "") {
                 try {
                   // eslint-disable-next-line no-console
@@ -1285,10 +1290,7 @@ export default function ChatPage() {
             <div className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs mt-1 break-words">{caseData.treatmentPlan || "—"}</div>
           </div>
 
-          <div>
-            <div className="text-xs text-muted">Dúvidas:</div>
-            <div className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs mt-1 break-words">{caseData.doubts || "—"}</div>
-          </div>
+          
 
           <div className="pt-2 border-t">
             <div className="text-xs text-muted">Objetivo geral</div>
@@ -1337,7 +1339,7 @@ export default function ChatPage() {
             <div className="p-5 overflow-y-auto max-h-[80vh]">
               {/* Formulário (full-width) - rolável e campos horizontais */}
               <form onSubmit={submitUnlock} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="text-xs text-muted">Paciente</label>
                     <Input
@@ -1357,25 +1359,13 @@ export default function ChatPage() {
                       className="mt-1 w-full text-sm py-2"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-muted">Plano de tratamento</label>
                     <Input
                       defaultValue={formCaseData.treatmentPlan}
                       onChange={(e) => handleFormChange("treatmentPlan", e.target.value)}
                       placeholder="Ex: Distalização / Mesialização"
-                      className="mt-1 w-full text-sm py-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-muted">Dúvidas principais</label>
-                    <Input
-                      defaultValue={formCaseData.doubts}
-                      onChange={(e) => handleFormChange("doubts", e.target.value)}
-                      placeholder="Ex: periodonto, ancoragem..."
                       className="mt-1 w-full text-sm py-2"
                     />
                   </div>

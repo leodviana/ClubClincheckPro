@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar } from "@/components/ui/Avatar";
+import ChangePasswordForm from "@/components/ChangePasswordForm";
 
 export default function NavAuth() {
   const { isAuthenticated, user, signOut } = useAuth();
@@ -13,6 +14,7 @@ export default function NavAuth() {
 
   const next = useMemo(() => encodeURIComponent(pathname), [pathname]);
   const [busy, setBusy] = useState(false);
+  const [showChangePwd, setShowChangePwd] = useState(false);
 
   if (!isAuthenticated) {
     return (
@@ -34,6 +36,10 @@ export default function NavAuth() {
         <Avatar name={user?.nome ?? user?.email ?? "Usuário"} />
         <span className="text-sm font-medium hidden sm:inline">{user?.nome ?? user?.email}</span>
       </div>
+
+      <button onClick={() => setShowChangePwd(true)} className="text-sm text-muted hover:text-text">Trocar senha</button>
+
+      {showChangePwd && <ChangePasswordForm onClose={() => setShowChangePwd(false)} />}
 
       <button
         type="button"
