@@ -94,10 +94,10 @@ function normalizeCreatedAt(raw: any): string {
 }
 
 const initialCaseData: CaseData = {
-  patientName: "Maria Paiva",
-  diagnostic: "Classe II",
-  treatmentPlan: "Distalização / Mesialização",
-  doubts: "Periodonto e necessidade de ancoragem esquelética",
+  patientName: "",
+  diagnostic: "",
+  treatmentPlan: "",
+  doubts: "",
 
   objective: "",
   patientConcerns: "",
@@ -133,6 +133,19 @@ export default function ChatPage() {
   const undoTimerRef = useRef<number | null>(null);
 
   const [caseData, setCaseData] = useState<CaseData>(initialCaseData);
+  const emptyFormCaseData: CaseData = {
+    patientName: "",
+    diagnostic: "",
+    treatmentPlan: "",
+    doubts: "",
+
+    objective: "",
+    patientConcerns: "",
+    doctorComments: "",
+    clinicalNotes: "",
+    treatmentLimitations: "",
+  };
+  const [formCaseData, setFormCaseData] = useState<CaseData>(emptyFormCaseData);
   const [confirmChecked, setConfirmChecked] = useState(false);
   const [submittingCase, setSubmittingCase] = useState(false);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
@@ -815,25 +828,125 @@ export default function ChatPage() {
           if (chatId) {
             const caseRes = await fetchJson<any>(`/api/chats/${chatId}/case`);
             const caseObj = Array.isArray(caseRes) ? caseRes[0] : caseRes?.data ?? caseRes;
-            if (caseObj && (caseObj.patientName || caseObj.patient_name || caseObj.name)) {
-              setCaseData((prev) => ({
-                patientName: caseObj.patientName ?? caseObj.patient_name ?? caseObj.name ?? prev.patientName,
-                diagnostic: caseObj.diagnostic ?? caseObj.diagnose ?? caseObj.diagnostico ?? prev.diagnostic,
-                treatmentPlan: caseObj.treatmentPlan ?? caseObj.treatment_plan ?? caseObj.plano ?? prev.treatmentPlan,
-                doubts: caseObj.doubts ?? caseObj.duvidas ?? caseObj.questions ?? prev.doubts,
-                objective: caseObj.objective ?? caseObj.objetivo ?? prev.objective,
-                patientConcerns: caseObj.patientConcerns ?? caseObj.patient_concerns ?? prev.patientConcerns,
-                doctorComments: caseObj.doctorComments ?? caseObj.doctor_comments ?? prev.doctorComments,
-                clinicalNotes: caseObj.clinicalNotes ?? caseObj.clinical_notes ?? prev.clinicalNotes,
-              }));
+            const hasAnyCaseField = (obj: any) => {
+              if (!obj) return false;
+              const keys = [
+                "patientName",
+                "patient_name",
+                "name",
+                "PatientName",
+                "Patient_Name",
+                "diagnostic",
+                "Diagnosis",
+                "diagnose",
+                "diagnostico",
+                "treatmentPlan",
+                "treatment_plan",
+                "TreatmentPlan",
+                "doubts",
+                "duvidas",
+                "questions",
+                "objective",
+                "ObjectiveGeneral",
+                "Objective",
+                "objectiveGeneral",
+                "objective_general",
+                "mainConcerns",
+                "MainConcerns",
+                "patientConcerns",
+                "doctorComments",
+                "DoctorComments",
+                "clinicalNotes",
+                "ClinicalConsiderations",
+                "clinical_considerations",
+                "treatmentLimitations",
+                "TreatmentLimitations",
+              ];
+              for (const k of keys) {
+                const v = obj[k];
+                if (v != null && String(v).trim() !== "") return true;
+              }
+              return false;
+            };
+
+            if (caseObj && hasAnyCaseField(caseObj)) {
+              const pickNonEmpty = (obj: any, keys: string[], fallback: string) => {
+                for (const k of keys) {
+                  const v = obj?.[k];
+                  if (v != null && String(v).trim() !== "") return String(v);
+                }
+                return fallback;
+              };
+
+              const mapped: CaseData = {
+                patientName:
+                  caseObj.patientName ?? caseObj.PatientName ?? caseObj.patient_name ?? caseObj.name ?? caseData.patientName,
+                diagnostic:
+                  caseObj.diagnostic ?? caseObj.Diagnosis ?? caseObj.diagnose ?? caseObj.diagnostico ?? caseData.diagnostic,
+                treatmentPlan:
+                  caseObj.treatmentPlan ?? caseObj.TreatmentPlan ?? caseObj.treatment_plan ?? caseObj.plano ?? caseData.treatmentPlan,
+                doubts: caseObj.doubts ?? caseObj.duvidas ?? caseObj.questions ?? caseData.doubts,
+                objective: pickNonEmpty(caseObj, [
+                  "objective",
+                  "ObjectiveGeneral",
+                  "Objective",
+                  "objectiveGeneral",
+                  "objective_general",
+                  "Objective_General",
+                  "objetivo",
+                  "ObjectiveText",
+                ], caseData.objective),
+                patientConcerns:
+                  caseObj.patientConcerns ?? caseObj.MainConcerns ?? caseObj.mainConcerns ?? caseObj.patient_concerns ?? caseData.patientConcerns,
+                doctorComments:
+                  caseObj.doctorComments ?? caseObj.DoctorComments ?? caseObj.doctor_comments ?? caseData.doctorComments,
+                clinicalNotes: pickNonEmpty(caseObj, [
+                  "clinicalNotes",
+                  "ClinicalConsiderations",
+                  "clinical_considerations",
+                  "Clinical_Considerations",
+                  "clinical_notes",
+                  "ClinicalConsideration",
+                  "clinicalConsiderations",
+                  "clinical_consideration",
+                  "clinical_note",
+                  "ClinicalNote",
+                  "ClinicalNotes",
+                  "clinicalObservation",
+                  "clinical_observations",
+                ], caseData.clinicalNotes),
+                treatmentLimitations:
+                  caseObj.treatmentLimitations ?? caseObj.TreatmentLimitations ?? caseObj.treatment_limitations ?? caseData.treatmentLimitations,
+              };
+
+              setCaseData(mapped);
               setCaseExists(true);
+
+              if (!mapped.objective || String(mapped.objective).trim() === "") {
+                try {
+                  // eslint-disable-next-line no-console
+                  console.warn("caseObj keys:", Object.keys(caseObj));
+                } catch (e) {}
+              }
+
+              if (!mapped.clinicalNotes || String(mapped.clinicalNotes).trim() === "") {
+                try {
+                  // eslint-disable-next-line no-console
+                  console.warn("caseObj keys (clinical missing):", Object.keys(caseObj));
+                } catch (e) {}
+              }
             } else {
               // explicit null/no-case response -> block chat until case submitted
               setCaseExists(false);
             }
           }
-        } catch (e) {
-          // on error, keep caseExists as null (do not block)
+        } catch (e: any) {
+          // If the case fetch fails (404 / no data / other), treat as "no case" so the
+          // required form is shown and the chat remains blocked until submission.
+          // Keep a console warning for debugging.
+          // eslint-disable-next-line no-console
+          console.warn("/case fetch failed, treating as no-case:", e?.message ?? e);
+          setCaseExists(false);
         }
       } catch (err: any) {
         console.error("failed to load messages", err);
@@ -864,14 +977,24 @@ export default function ChatPage() {
     setCaseData((prev) => ({ ...prev, [field]: value }));
   }
 
+  function handleFormChange(field: keyof CaseData, value: string) {
+    setFormCaseData((prev) => ({ ...prev, [field]: value }));
+  }
+
+  useEffect(() => {
+    // when the modal is shown (blocked), present an empty form
+    if (isBlocked) setFormCaseData(emptyFormCaseData);
+  }, [isBlocked]);
+
   async function submitUnlock(e: React.FormEvent) {
     e.preventDefault();
 
     // validação mínima
     if (!confirmChecked) return alert("Confirme que as informações estão corretas.");
-    if (!caseData.objective.trim()) return alert("Informe o objetivo geral do tratamento.");
-    if (!caseData.patientConcerns.trim()) return alert("Informe as queixas do paciente.");
-    if (!caseData.doctorComments.trim()) return alert("Informe os comentários do dentista.");
+    if (!formCaseData.patientName.trim()) return alert("Informe o nome do paciente.");
+    if (!formCaseData.objective.trim()) return alert("Informe o objetivo geral do tratamento.");
+    if (!formCaseData.patientConcerns.trim()) return alert("Informe as queixas do paciente.");
+    if (!formCaseData.doctorComments.trim()) return alert("Informe os comentários do dentista.");
 
     if (!chatId) return alert("Chat inválido");
 
@@ -879,38 +1002,32 @@ export default function ChatPage() {
     try {
       setSubmittingCase(true);
 
-      // Build payload dynamically from caseData so any added fields are included.
+      // Build payload with PascalCase keys expected by backend C# model.
       const payload: any = {
-        confirmed: !!confirmChecked,
-        confirmed_by: user?.id ?? null,
-        // include chat/session info (session is accessToken)
-        chatId: chatId,
-        chat_id: chatId,
-        session: (accessToken ?? null),
-        session_token: (accessToken ?? null),
+        ChatSessionId: chatId,
+        PatientName: formCaseData.patientName ?? null,
+        Diagnosis: formCaseData.diagnostic ?? null,
+        TreatmentPlan: formCaseData.treatmentPlan ?? null,
+        MainConcerns: formCaseData.patientConcerns ?? null,
+        DoctorComments: formCaseData.doctorComments ?? null,
+        ClinicalConsiderations: formCaseData.clinicalNotes ?? null,
+        TreatmentLimitations: formCaseData.treatmentLimitations ?? null,
+        ObjectiveGeneral: formCaseData.objective ?? null,
+        Confirmed: !!confirmChecked,
+        // optional: who confirmed (not in original model but useful)
+        ConfirmedBy: user?.id ?? null,
+        // session token if backend needs it
+        SessionToken: accessToken ?? null,
+        // timestamps (server may override)
+        CreatedAt: new Date().toISOString(),
+        UpdatedAt: null,
       };
 
-      // helper: convert camelCase to snake_case
-      const camelToSnake = (s: string) => s.replace(/([A-Z])/g, "_$1").toLowerCase();
-
-      for (const [k, v] of Object.entries(caseData)) {
-        payload[k] = v;
-        const snake = camelToSnake(k);
-        // don't override existing keys like confirmed_by
-        if (!(snake in payload)) payload[snake] = v;
-      }
-
-      // Additional name mappings requested:
-      // include `diagnosis` (alias for `diagnostic`) and mainConcerns/main_concerns
-      if (caseData.diagnostic !== undefined) {
-        payload.diagnosis = caseData.diagnostic;
-        if (!("diagnosis" in payload)) payload.diagnosis = caseData.diagnostic;
-        if (!("diagnosis" in payload)) payload["diagnosis"] = caseData.diagnostic;
-      }
-      if (caseData.patientConcerns !== undefined) {
-        payload.mainConcerns = caseData.patientConcerns;
-        payload.main_concerns = caseData.patientConcerns;
-      }
+      // Debug: print payload before sending so you can verify ChatSessionId and keys
+      try {
+        // eslint-disable-next-line no-console
+        console.log("[submitUnlock] PascalCase payload:", payload);
+      } catch (e) {}
 
       await fetchJson<any>(`/api/chats/${chatId}/case`, {
         method: "POST",
@@ -1152,44 +1269,54 @@ export default function ChatPage() {
         <h3 className="font-semibold mb-2">Dados do caso</h3>
         <p className="text-sm text-muted mb-4">Informações rápidas do caso.</p>
 
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted">Paciente:</span>
-            <span className="font-medium">{caseData.patientName}</span>
+        <div className="space-y-3 text-sm">
+          <div>
+            <div className="text-xs text-muted">Paciente:</div>
+            <div className="font-medium mt-1 break-words">{caseData.patientName || "—"}</div>
           </div>
 
-          <div className="flex justify-between">
-            <span className="text-muted">Diagnóstico:</span>
-            <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs">{caseData.diagnostic}</span>
+          <div>
+            <div className="text-xs text-muted">Diagnóstico:</div>
+            <div className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs mt-1 break-words">{caseData.diagnostic || "—"}</div>
           </div>
 
-          <div className="flex justify-between">
-            <span className="text-muted">Plano:</span>
-            <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs">
-              {caseData.treatmentPlan}
-            </span>
+          <div>
+            <div className="text-xs text-muted">Plano:</div>
+            <div className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs mt-1 break-words">{caseData.treatmentPlan || "—"}</div>
           </div>
 
-          <div className="flex justify-between">
-            <span className="text-muted">Dúvidas:</span>
-            <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs">{caseData.doubts}</span>
+          <div>
+            <div className="text-xs text-muted">Dúvidas:</div>
+            <div className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs mt-1 break-words">{caseData.doubts || "—"}</div>
+          </div>
+
+          <div className="pt-2 border-t">
+            <div className="text-xs text-muted">Objetivo geral</div>
+            <div className="font-medium text-sm mt-1 break-words">{caseData.objective || "—"}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted">Principais preocupações do paciente</div>
+            <div className="font-medium text-sm mt-1 break-words">{caseData.patientConcerns || "—"}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted">Comentários do doutor</div>
+            <div className="font-medium text-sm mt-1 break-words">{caseData.doctorComments || "—"}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted">Considerações clínicas</div>
+            <div className="font-medium text-sm mt-1 break-words">{caseData.clinicalNotes || "—"}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted">Limitações do plano de tratamento</div>
+            <div className="font-medium text-sm mt-1 break-words">{caseData.treatmentLimitations || "—"}</div>
           </div>
         </div>
 
-        {/* Botão de teste para ver o bloqueio */}
-        <div className="mt-5">
-                <Button
-                  type="button"
-                  className="w-full justify-center"
-                  onClick={() => {
-                    setUnlockFormDone(false);
-                    setStatus("encerrado");
-                    setCaseExists(false);
-                  }}
-                >
-                  Testar bloqueio
-                </Button>
-        </div>
+        {/* test button removed */}
       </aside>
 
       {/* MODAL (finalizado) */}
@@ -1214,8 +1341,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Paciente</label>
                     <Input
-                      value={caseData.patientName}
-                      onChange={(e) => handleCaseChange("patientName", e.target.value)}
+                      defaultValue={formCaseData.patientName}
+                      onChange={(e) => handleFormChange("patientName", e.target.value)}
                       placeholder="Nome do paciente"
                       className="mt-1 w-full text-sm py-2"
                     />
@@ -1224,8 +1351,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Diagnóstico</label>
                     <Input
-                      value={caseData.diagnostic}
-                      onChange={(e) => handleCaseChange("diagnostic", e.target.value)}
+                      defaultValue={formCaseData.diagnostic}
+                      onChange={(e) => handleFormChange("diagnostic", e.target.value)}
                       placeholder="Diagnóstico"
                       className="mt-1 w-full text-sm py-2"
                     />
@@ -1236,8 +1363,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Plano de tratamento</label>
                     <Input
-                      value={caseData.treatmentPlan}
-                      onChange={(e) => handleCaseChange("treatmentPlan", e.target.value)}
+                      defaultValue={formCaseData.treatmentPlan}
+                      onChange={(e) => handleFormChange("treatmentPlan", e.target.value)}
                       placeholder="Ex: Distalização / Mesialização"
                       className="mt-1 w-full text-sm py-2"
                     />
@@ -1246,8 +1373,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Dúvidas principais</label>
                     <Input
-                      value={caseData.doubts}
-                      onChange={(e) => handleCaseChange("doubts", e.target.value)}
+                      defaultValue={formCaseData.doubts}
+                      onChange={(e) => handleFormChange("doubts", e.target.value)}
                       placeholder="Ex: periodonto, ancoragem..."
                       className="mt-1 w-full text-sm py-2"
                     />
@@ -1257,8 +1384,8 @@ export default function ChatPage() {
                 <div>
                   <label className="text-xs text-muted">Objetivo geral do tratamento</label>
                   <textarea
-                    value={caseData.objective}
-                    onChange={(e) => handleCaseChange("objective", e.target.value)}
+                    defaultValue={formCaseData.objective}
+                    onChange={(e) => handleFormChange("objective", e.target.value)}
                     placeholder="Descreva o objetivo geral do tratamento..."
                     className="mt-1 w-full rounded-lg border p-3 h-36 resize-none"
                   />
@@ -1268,8 +1395,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Principais preocupações do paciente</label>
                     <textarea
-                      value={caseData.patientConcerns}
-                      onChange={(e) => handleCaseChange("patientConcerns", e.target.value)}
+                      defaultValue={formCaseData.patientConcerns}
+                      onChange={(e) => handleFormChange("patientConcerns", e.target.value)}
                       placeholder="Ex: Arco estreito, apinhamento, outros..."
                       className="mt-1 w-full rounded-lg border p-3 h-28 resize-none"
                     />
@@ -1278,8 +1405,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Comentários do doutor</label>
                     <textarea
-                      value={caseData.doctorComments}
-                      onChange={(e) => handleCaseChange("doctorComments", e.target.value)}
+                      defaultValue={formCaseData.doctorComments}
+                      onChange={(e) => handleFormChange("doctorComments", e.target.value)}
                       placeholder="Ex: a queixa da paciente é..."
                       className="mt-1 w-full rounded-lg border p-3 h-28 resize-none"
                     />
@@ -1290,8 +1417,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Considerações clínicas (opcional)</label>
                     <textarea
-                      value={caseData.clinicalNotes}
-                      onChange={(e) => handleCaseChange("clinicalNotes", e.target.value)}
+                      defaultValue={formCaseData.clinicalNotes}
+                      onChange={(e) => handleFormChange("clinicalNotes", e.target.value)}
                       placeholder="Ex: periodonto, perda óssea, gengiva fina..."
                       className="mt-1 w-full rounded-lg border p-3 h-24 resize-none"
                     />
@@ -1300,8 +1427,8 @@ export default function ChatPage() {
                   <div>
                     <label className="text-xs text-muted">Limitações do plano de tratamento (opcional)</label>
                     <textarea
-                      value={caseData.treatmentLimitations}
-                      onChange={(e) => handleCaseChange("treatmentLimitations", e.target.value)}
+                      defaultValue={formCaseData.treatmentLimitations}
+                      onChange={(e) => handleFormChange("treatmentLimitations", e.target.value)}
                       placeholder="Ex: tempo, cooperação do paciente..."
                       className="mt-1 w-full rounded-lg border p-3 h-24 resize-none"
                     />
@@ -1315,13 +1442,6 @@ export default function ChatPage() {
                   </label>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="text-sm px-4 py-2 rounded-2xl border bg-white hover:bg-slate-50"
-                      onClick={() => alert("Este chat está finalizado. Você precisa enviar o formulário para liberar.")}
-                    >
-                      Cancelar
-                    </button>
                     <Button type="submit" disabled={!confirmChecked || submittingCase} className="bg-brand-blue text-white px-6 py-2">
                       {submittingCase ? "Enviando..." : "Enviar e liberar chat"}
                     </Button>
