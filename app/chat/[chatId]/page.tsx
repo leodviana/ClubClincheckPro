@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/hooks/useAuth";
@@ -129,6 +129,8 @@ export default function ChatPage() {
   const [showUndoBanner, setShowUndoBanner] = useState(false);
   const [undoCountdown, setUndoCountdown] = useState(0);
   const undoTimerRef = useRef<number | null>(null);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [noticeVisible, setNoticeVisible] = useState(false);
 
   const [caseData, setCaseData] = useState<CaseData>(initialCaseData);
   const emptyFormCaseData: CaseData = {
@@ -167,6 +169,18 @@ export default function ChatPage() {
   const [text, setText] = useState("");
   const { fetchJson } = useApi();
   const { user, status: authStatus, accessToken } = useAuth();
+  const router = useRouter();
+
+  // Attach authenticated user id as header for backend calls that need it.
+  function withUserHeader(options: RequestInit = {}) {
+    try {
+      const headers = new Headers(options.headers || {});
+      if (user?.id != null) headers.set("X-Id-Usuario", String(user.id));
+      return { ...options, headers } as RequestInit;
+    } catch (e) {
+      return options;
+    }
+  }
   
   function isAdminUser(u: any) {
     if (!u) return false;
@@ -645,15 +659,56 @@ export default function ChatPage() {
       setMessagesError(null);
       setMessages([]);
 
+      // (IdUsuario notification removed — only the initial chat meta fetch will include the user id)
+
       try {
         // fetch chat meta
         let data: any = null;
         try {
-          data = await fetchJson<any>(`/api/chats/${chatId}`);
-          
-        } catch (e) {
+          const metaPath = user?.id
+            ? `/api/Chats/${chatId}/${encodeURIComponent(String(user.id))}`
+            : `/api/chats/${chatId}`;
+          data = await fetchJson<any>(metaPath);
+        } catch (e: any) {
+          // Try to extract server message (may be JSON or plain text)
+          const raw = String(e?.message ?? e ?? "");
+          let parsedMsg = raw;
+          try {
+            const j = JSON.parse(raw);
+            parsedMsg = j?.message ?? j?.error ?? j?.detail ?? JSON.stringify(j);
+          } catch (_err) {
+            // not JSON, keep raw
+          }
+
+          // If backend returned an authorization/permission error, show message and redirect.
+          try {
+            const low = String(parsedMsg || "").toLowerCase();
+            // match Portuguese variants: "Usuário sem permissão para acessar esse caso" (with/without accents)
+            if (/(usu[aá]rio).*sem.*perm/i.test(parsedMsg) || /sem\s+perm/i.test(low) && /acessar/.test(low)) {
+              const displayed = parsedMsg || "Usuário sem permissão para acessar esse caso!";
+              try {
+                setNoticeMessage(displayed);
+                setNoticeVisible(true);
+              } catch (_) {}
+              setLoadingMessages(false);
+              // wait a moment so the user can read the notice, then redirect
+              setTimeout(() => {
+                setNoticeVisible(false);
+                router.push("/");
+              }, 2200);
+              return;
+            }
+          } catch (_) {}
+
+          // If backend returned 404, redirect to home and stop loading.
+          if (/\b404\b|HTTP\s*404/i.test(raw) || /\b404\b/.test(parsedMsg)) {
+            setLoadingMessages(false);
+            router.push("/");
+            return;
+          }
+
+          // otherwise continue without meta (data = null)
           data = null;
-          
         }
 
         // prefer messages endpoint if available
@@ -1055,6 +1110,11 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
+      {noticeVisible && noticeMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="px-4 py-2 bg-red-600 text-white rounded-md shadow">{noticeMessage}</div>
+        </div>
+      )}
       {/* MAIN */}
       <div className="flex-1 flex flex-col">
         <div className="border-b px-6 py-3 bg-white flex items-center justify-between">
