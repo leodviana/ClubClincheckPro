@@ -26,7 +26,7 @@ export default function NavAuth() {
 
   return (
     <nav className="flex items-center gap-4 text-sm text-muted">
-      {user?.profile === 1 ? (
+      {(Number(user?.id) === 3 || user?.profile === 1) ? (
         <Link href="/admin/chats" className="hover:text-text">Admin</Link>
       ) : (
         <Link href="/" className="hover:text-text">Início</Link>
