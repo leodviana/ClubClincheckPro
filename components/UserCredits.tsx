@@ -9,9 +9,9 @@ import { useEffect, useState } from "react";
 
 type Credit = {
   id: string;
-  title?: string;
+  title?: string | null;
   remaining?: number;
-  status?: string;
+  status?: string | null;
   createdAt?: string | null;
   openAt?: string | null;
   closeAt?: string | null;
