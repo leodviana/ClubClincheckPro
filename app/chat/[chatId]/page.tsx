@@ -18,6 +18,8 @@ type Message = {
   pending?: boolean;
   failed?: boolean; // true when last send attempt failed
   senderId?: string | number;
+  senderName?: string | null;
+  userName?: string | null; // backend: userName field (responsible)
   isPalette?: boolean; // when true, render with palette color instead of white
 };
 
@@ -164,6 +166,7 @@ export default function ChatPage() {
       type: "text",
       content: "Olá, pode verificar o estagiamento da distalização?",
       createdAt: new Date().toISOString(),
+      senderName: "Especialista",
     },
   ]);
   const [text, setText] = useState("");
@@ -274,6 +277,8 @@ export default function ChatPage() {
       content,
       createdAt: new Date().toISOString(),
       senderId: user?.id,
+      senderName: (user as any)?.nome ?? (user as any)?.name ?? null,
+      userName: (user as any)?.userName ?? (user as any)?.username ?? null,
       isPalette: isCurrentUserPalette,
     };
 
@@ -299,6 +304,8 @@ export default function ChatPage() {
       pending: true,
       failed: false,
       senderId: user?.id,
+      senderName: (user as any)?.nome ?? (user as any)?.name ?? null,
+      userName: (user as any)?.userName ?? (user as any)?.username ?? null,
       isPalette: isPalette,
     };
 
@@ -370,6 +377,8 @@ export default function ChatPage() {
                   // preserve optimistic createdAt to avoid visible timestamp jump
                   createdAt: m.createdAt || serverMsg.createdAt,
                   isPalette: m.isPalette || serverMsg.isPalette,
+                  // prefer server-provided senderName when available
+                  senderName: m.senderName || (item?.senderName ?? item?.name ?? item?.nome ?? null),
                   pending: false,
                 }
               : m
@@ -581,7 +590,12 @@ export default function ChatPage() {
           if (user?.id && rawFrom === user.id.toString()) from = "user";
         }
 
-        return { id, from, type, content, createdAt, senderId, isPalette } as Message;
+        const senderName =
+          item?.senderName ?? item?.sender?.name ?? item?.name ?? item?.nome ?? item?.displayName ?? item?.username ?? null;
+
+        const userName = item?.userName ?? item?.user?.userName ?? item?.usuario ?? null;
+
+        return { id, from, type, content, createdAt, senderId, isPalette, senderName, userName } as Message;
       } catch (err) {
         lastErr = err;
       }
@@ -857,6 +871,11 @@ export default function ChatPage() {
 
           const content = it.content ?? it.text ?? it.message ?? it.body ?? it.url ?? "";
 
+          const senderName =
+            it.senderName ?? it.sender?.name ?? it.sender?.nome ?? it.name ?? it.nome ?? it.displayName ?? it.username ?? it.userName ?? it.remetente ?? null;
+
+          const userNameCandidate = it.userName ?? it.user?.userName ?? it.usuario ?? null;
+
           const rawType = it.type ?? it.tipo ?? it.message_type ?? null;
           let type: Message["type"] = "text";
           if (typeof rawType === "number") type = TYPE_MAP_IN[rawType] ?? "text";
@@ -869,7 +888,7 @@ export default function ChatPage() {
 
           const createdAt = normalizeCreatedAt(it.createdAt ?? it.created_at ?? it.timestamp ?? it.dt_criacao ?? null);
 
-          return { id, from, type, content, createdAt, senderId, isPalette } as Message;
+          return { id, from, type, content, createdAt, senderId, isPalette, senderName, userName: userNameCandidate } as Message;
         });
 
         
@@ -1122,7 +1141,12 @@ export default function ChatPage() {
                 <Avatar name="Especialista" />
                 <div>
                   <h2 className="font-semibold leading-tight">
-                    {routedChatNo ? (
+                    {caseData.patientName ? (
+                      <>
+                        {caseData.patientName}
+                        <span className="text-sm font-normal text-muted ml-2">{chatTitle ?? `Chat: ${chatId}`}</span>
+                      </>
+                    ) : routedChatNo ? (
                       <>
                         Chat No: <span className="font-semibold">#{routedChatNo}</span>
                         {" — "}
@@ -1195,6 +1219,16 @@ export default function ChatPage() {
                     : "bg-white"
                 } ${m.pending ? "opacity-70 italic" : ""}`}
               >
+                {/* Sender name + time */}
+                <div className="mb-1 flex items-baseline gap-2">
+                  <span className="text-[11px] font-medium opacity-80">
+                    {String(m.from) === "user" && m.senderId != null && user?.id != null && String(m.senderId) === String(user.id)
+                      ? "Você"
+                      : m.senderName ?? (m.from === "admin" ? "Especialista" : "Paciente")}
+                  </span>
+                  <span className="text-[10px] opacity-70">{m.pending ? "Enviando..." : new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                </div>
+
                 {m.type === "text" && <p className="text-sm">{m.content}</p>}
                 {m.type === "image" && <img src={m.content} alt="imagem enviada" className="rounded-md max-h-60" />}
                 {m.type === "video" && (
@@ -1208,11 +1242,6 @@ export default function ChatPage() {
                   </audio>
                 )}
                 <div className="mt-1">
-                  <span className="text-[10px] opacity-70 block">
-                    {m.pending
-                      ? "Enviando..."
-                      : new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
                   {m.failed && (
                     <div className="text-[11px] text-red-600 mt-1 flex items-center gap-2">
                       <span>Falha ao enviar</span>
@@ -1239,45 +1268,49 @@ export default function ChatPage() {
         <div className="border-t bg-white px-4 py-3 flex gap-2 items-center">
           {showSendControls ? (
             <>
-              <label className={`text-xs px-3 py-2 bg-slate-100 rounded-md cursor-pointer ${cannotSend ? "opacity-60" : ""}`}>
-                Img
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  disabled={cannotSend}
-                  onChange={(e) => handleFile(e, "image")}
-                />
-              </label>
+              {isCurrentUserAdmin && (
+                <>
+                  <label className={`text-xs px-3 py-2 bg-slate-100 rounded-md cursor-pointer ${cannotSend ? "opacity-60" : ""}`}>
+                    Img
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      disabled={cannotSend}
+                      onChange={(e) => handleFile(e, "image")}
+                    />
+                  </label>
 
-              <label className={`text-xs px-3 py-2 bg-slate-100 rounded-md cursor-pointer ${cannotSend ? "opacity-60" : ""}`}>
-                Vídeo
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="video/*"
-                  disabled={cannotSend}
-                  onChange={(e) => handleFile(e, "video")}
-                />
-              </label>
+                  <label className={`text-xs px-3 py-2 bg-slate-100 rounded-md cursor-pointer ${cannotSend ? "opacity-60" : ""}`}>
+                    Vídeo
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="video/*"
+                      disabled={cannotSend}
+                      onChange={(e) => handleFile(e, "video")}
+                    />
+                  </label>
 
-              {!isRecording ? (
-                <button
-                  onClick={startRecording}
-                  className={`text-xs px-3 py-2 bg-slate-100 rounded-md ${cannotSend ? "opacity-60" : ""}`}
-                  type="button"
-                  disabled={cannotSend}
-                >
-                  🎙️ Áudio
-                </button>
-              ) : (
-                <button
-                  onClick={stopRecording}
-                  className="flex items-center gap-2 text-xs px-3 py-2 bg-red-100 text-red-700 rounded-md"
-                  type="button"
-                >
-                  ⏹️ Gravando {formatTime(recordTime)}
-                </button>
+                  {!isRecording ? (
+                    <button
+                      onClick={startRecording}
+                      className={`text-xs px-3 py-2 bg-slate-100 rounded-md ${cannotSend ? "opacity-60" : ""}`}
+                      type="button"
+                      disabled={cannotSend}
+                    >
+                      🎙️ Áudio
+                    </button>
+                  ) : (
+                    <button
+                      onClick={stopRecording}
+                      className="flex items-center gap-2 text-xs px-3 py-2 bg-red-100 text-red-700 rounded-md"
+                      type="button"
+                    >
+                      ⏹️ Gravando {formatTime(recordTime)}
+                    </button>
+                  )}
+                </>
               )}
 
               <Input
@@ -1330,9 +1363,8 @@ export default function ChatPage() {
       </div>
 
       {/* ASIDE */}
-      <aside className="w-80 border-l bg-white p-4 hidden lg:block">
+      <aside className="w-80 border-l bg-white p-3 hidden lg:block overflow-auto max-h-[calc(100vh-3.5rem)]">
         <h3 className="font-semibold mb-2">Dados do caso</h3>
-        <p className="text-sm text-muted mb-4">Informações rápidas do caso.</p>
 
         <div className="space-y-3 text-sm">
           <div>
