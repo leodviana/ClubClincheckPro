@@ -1316,7 +1316,15 @@ export default function ChatPage() {
               <Input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendText()}
+                onKeyDown={(e) => {
+                  // Enter to send, Shift+Enter to insert newline
+                  if (e.key === "Enter" && !(e as any).shiftKey) {
+                    e.preventDefault();
+                    handleSendText();
+                  }
+                }}
+                multiline
+                rows={2}
                 placeholder={cannotSend ? "Chat encerrado" : isBlocked ? "Preencha o formulário para liberar o chat..." : "Escreva sua mensagem..."}
                 disabled={cannotSend}
                 className="flex-1"
