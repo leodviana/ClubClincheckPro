@@ -70,7 +70,7 @@ export default function ChangePasswordForm({ onClose }: { onClose?: () => void }
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-24">
       <div className="absolute inset-0 bg-black/40" onClick={() => onClose?.()} />
-      <Card className="relative w-full max-w-md bg-white border p-6 overflow-hidden rounded-2xl">
+      <Card className="relative w-full max-w-md bg-card border p-6 overflow-hidden rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-semibold">Trocar senha</h3>
           <button onClick={() => onClose?.()} className="text-sm text-muted">Fechar</button>
