@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
-            <header className="sticky top-0 z-20 h-14 border-b bg-white flex items-center px-6 justify-between">
+            <header className="sticky top-0 z-20 h-14 border-b bg-card flex items-center px-6 justify-between">
               <div className="flex items-center gap-3">
                 <a href="/" className="flex items-center gap-3">
                   <Image src="/logo.png" alt="ClubClincheck" width={180} height={40} priority className="h-auto" />

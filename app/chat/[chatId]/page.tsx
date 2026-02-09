@@ -126,7 +126,7 @@ export default function ChatPage() {
 
   // cannotSend is computed later after `user` is available
 
-  
+
   const [closingChat, setClosingChat] = useState(false);
   const [showUndoBanner, setShowUndoBanner] = useState(false);
   const [undoCountdown, setUndoCountdown] = useState(0);
@@ -139,7 +139,7 @@ export default function ChatPage() {
     patientName: "",
     diagnostic: "",
     treatmentPlan: "",
-    
+
     objective: "",
     patientConcerns: "",
     doctorComments: "",
@@ -184,7 +184,7 @@ export default function ChatPage() {
       return options;
     }
   }
-  
+
   function isAdminUser(u: any) {
     if (!u) return false;
     const idn = Number(u.id as any);
@@ -372,15 +372,15 @@ export default function ChatPage() {
           prev.map((m) =>
             m.id === tempId
               ? {
-                  ...m,
-                  ...serverMsg,
-                  // preserve optimistic createdAt to avoid visible timestamp jump
-                  createdAt: m.createdAt || serverMsg.createdAt,
-                  isPalette: m.isPalette || serverMsg.isPalette,
-                  // prefer server-provided senderName when available
-                  senderName: m.senderName || (item?.senderName ?? item?.name ?? item?.nome ?? null),
-                  pending: false,
-                }
+                ...m,
+                ...serverMsg,
+                // preserve optimistic createdAt to avoid visible timestamp jump
+                createdAt: m.createdAt || serverMsg.createdAt,
+                isPalette: m.isPalette || serverMsg.isPalette,
+                // prefer server-provided senderName when available
+                senderName: m.senderName || (item?.senderName ?? item?.name ?? item?.nome ?? null),
+                pending: false,
+              }
               : m
           )
         );
@@ -391,7 +391,7 @@ export default function ChatPage() {
       }
     })();
 
-        
+
   }
 
   // Retry sending a failed message
@@ -475,8 +475,8 @@ export default function ChatPage() {
     }
     setShowUndoBanner(false);
     setUndoCountdown(0);
-      try {
-        await fetchJson<any>(`/api/Chats/open-chat/${chatId}`, {
+    try {
+      await fetchJson<any>(`/api/Chats/open-chat/${chatId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -493,7 +493,7 @@ export default function ChatPage() {
     } catch (err: any) {
       // if server doesn't support open, revert UI and show message
       console.error("undo close failed", err);
-        alert("Não foi possível reabrir o chat no servidor. O chat permanecerá encerrado.");
+      alert("Não foi possível reabrir o chat no servidor. O chat permanecerá encerrado.");
     }
   }
 
@@ -703,7 +703,7 @@ export default function ChatPage() {
               try {
                 setNoticeMessage(displayed);
                 setNoticeVisible(true);
-              } catch (_) {}
+              } catch (_) { }
               setLoadingMessages(false);
               // wait a moment so the user can read the notice, then redirect
               setTimeout(() => {
@@ -712,7 +712,7 @@ export default function ChatPage() {
               }, 2200);
               return;
             }
-          } catch (_) {}
+          } catch (_) { }
 
           // If backend returned 404, redirect to home and stop loading.
           if (/\b404\b|HTTP\s*404/i.test(raw) || /\b404\b/.test(parsedMsg)) {
@@ -730,10 +730,10 @@ export default function ChatPage() {
         try {
           const forced = await fetchJson<any>(`/api/chats/${chatId}/messages`);
           forcedMsgs = Array.isArray(forced) ? forced : forced?.messages ?? forced?.data ?? null;
-          
+
         } catch (e) {
           forcedMsgs = null;
-          
+
         }
 
         // determine chat meta
@@ -891,7 +891,7 @@ export default function ChatPage() {
           return { id, from, type, content, createdAt, senderId, isPalette, senderName, userName: userNameCandidate } as Message;
         });
 
-        
+
         setMessages(mapped);
 
         // try load case data
@@ -917,7 +917,7 @@ export default function ChatPage() {
                 "treatmentPlan",
                 "treatment_plan",
                 "TreatmentPlan",
-                
+
                 "questions",
                 "objective",
                 "ObjectiveGeneral",
@@ -958,7 +958,7 @@ export default function ChatPage() {
                   caseObj.diagnostic ?? caseObj.diagnosis ?? caseObj.Diagnosis ?? caseObj.diagnose ?? caseObj.diagnostico ?? caseObj["diagnóstico"] ?? caseObj["Diagnóstico"] ?? caseData.diagnostic,
                 treatmentPlan:
                   caseObj.treatmentPlan ?? caseObj.TreatmentPlan ?? caseObj.treatment_plan ?? caseObj.plano ?? caseData.treatmentPlan,
-                
+
                 objective: pickNonEmpty(caseObj, [
                   "objective",
                   "ObjectiveGeneral",
@@ -999,20 +999,20 @@ export default function ChatPage() {
                 try {
                   // eslint-disable-next-line no-console
                   console.warn("caseObj keys (diagnostic missing):", Object.keys(caseObj), "caseObj:", caseObj);
-                } catch (e) {}
+                } catch (e) { }
               }
               if (!mapped.objective || String(mapped.objective).trim() === "") {
                 try {
                   // eslint-disable-next-line no-console
                   console.warn("caseObj keys:", Object.keys(caseObj));
-                } catch (e) {}
+                } catch (e) { }
               }
 
               if (!mapped.clinicalNotes || String(mapped.clinicalNotes).trim() === "") {
                 try {
                   // eslint-disable-next-line no-console
                   console.warn("caseObj keys (clinical missing):", Object.keys(caseObj));
-                } catch (e) {}
+                } catch (e) { }
               }
             } else {
               // explicit null/no-case response -> block chat until case submitted
@@ -1106,7 +1106,7 @@ export default function ChatPage() {
       try {
         // eslint-disable-next-line no-console
         console.log("[submitUnlock] PascalCase payload:", payload);
-      } catch (e) {}
+      } catch (e) { }
 
       await fetchJson<any>(`/api/chats/${chatId}/case`, {
         method: "POST",
@@ -1136,29 +1136,29 @@ export default function ChatPage() {
       )}
       {/* MAIN */}
       <div className="flex-1 flex flex-col">
-        <div className="border-b px-6 py-3 bg-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Avatar name="Especialista" />
-                <div>
-                  <h2 className="font-semibold leading-tight">
-                    {caseData.patientName ? (
-                      <>
-                        {caseData.patientName}
-                        <span className="text-sm font-normal text-muted ml-2">{chatTitle ?? `Chat: ${chatId}`}</span>
-                      </>
-                    ) : routedChatNo ? (
-                      <>
-                        Chat No: <span className="font-semibold">#{routedChatNo}</span>
-                        {" — "}
-                        {chatTitle ?? chatId}
-                      </>
-                    ) : (
-                      chatTitle ?? `Chat: ${chatId}`
-                    )}
-                  </h2>
-                  <div className="text-xs text-muted mt-1">
-                    <span>ID: <b title={chatId} className="break-all">{chatId}</b></span>
-                  </div>
+        <div className="border-b px-6 py-3 bg-card flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar name="Especialista" />
+            <div>
+              <h2 className="font-semibold leading-tight">
+                {caseData.patientName ? (
+                  <>
+                    {caseData.patientName}
+                    <span className="text-sm font-normal text-muted ml-2">{chatTitle ?? `Chat: ${chatId}`}</span>
+                  </>
+                ) : routedChatNo ? (
+                  <>
+                    Chat No: <span className="font-semibold">#{routedChatNo}</span>
+                    {" — "}
+                    {chatTitle ?? chatId}
+                  </>
+                ) : (
+                  chatTitle ?? `Chat: ${chatId}`
+                )}
+              </h2>
+              <div className="text-xs text-muted mt-1">
+                <span>ID: <b title={chatId} className="break-all">{chatId}</b></span>
+              </div>
               <div className="flex items-center gap-2 text-xs text-muted">
                 <span className="relative inline-flex">
                   <span className="h-2 w-2 rounded-full bg-brand-blue animate-ping-slow absolute opacity-70" />
@@ -1170,13 +1170,12 @@ export default function ChatPage() {
           </div>
 
           <span
-            className={`text-xs px-3 py-1 rounded-full ${
-              status === "aberto"
-                ? "bg-amber-100 text-amber-700"
-                : status === "encerrado"
+            className={`text-xs px-3 py-1 rounded-full ${status === "aberto"
+              ? "bg-amber-100 text-amber-700"
+              : status === "encerrado"
                 ? "bg-slate-100 text-slate-600"
                 : "bg-red-100 text-red-700"
-            }`}
+              }`}
           >
             {statusLabel}
           </span>
@@ -1191,33 +1190,28 @@ export default function ChatPage() {
             </div>
           )}
 
-          
+
         </div>
 
         <div
           ref={listRef}
           onScroll={onScroll}
           className="flex-1 overflow-y-auto p-6 space-y-4"
-          style={{
-            background:
-              "radial-gradient(circle at 10% 20%, rgba(255,42,149,0.04) 0%, rgba(243,244,246,1) 35%), radial-gradient(circle at 90% 80%, rgba(59,130,246,0.06) 0%, rgba(243,244,246,1) 45%)",
-          }}
         >
-            {messagesError && (
-              <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-100 text-sm text-red-700">
-                Erro ao carregar mensagens: {messagesError}
-              </div>
-            )}
+          {messagesError && (
+            <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-100 text-sm text-red-700">
+              Erro ao carregar mensagens: {messagesError}
+            </div>
+          )}
 
-            
+
           {messages.map((m) => (
             <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-sm rounded-2xl px-4 py-3 shadow-sm ${
-                  m.isPalette
-                    ? "bg-gradient-to-r from-brand-pink via-brand-magenta to-brand-blue text-white"
-                    : "bg-white"
-                } ${m.pending ? "opacity-70 italic" : ""}`}
+                className={`max-w-sm rounded-2xl px-4 py-3 shadow-sm ${m.isPalette
+                  ? "bg-gradient-to-r from-brand-pink via-brand-magenta to-brand-blue text-white"
+                  : "bg-card"
+                  } ${m.pending ? "opacity-70 italic" : ""}`}
               >
                 {/* Sender name + time */}
                 <div className="mb-1 flex items-baseline gap-2">
@@ -1226,7 +1220,7 @@ export default function ChatPage() {
                       ? "Você"
                       : m.senderName ?? (m.from === "admin" ? "Especialista" : "Paciente")}
                   </span>
-                  <span className="text-[10px] opacity-70">{m.pending ? "Enviando..." : new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="text-[10px] opacity-70">{m.pending ? "Enviando..." : new Date(m.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
 
                 {m.type === "text" && <p className="text-sm">{m.content}</p>}
@@ -1258,14 +1252,14 @@ export default function ChatPage() {
           {showScrollBtn && (
             <button
               onClick={scrollToBottom}
-              className="fixed bottom-28 right-6 text-xs px-3 py-2 rounded-full bg-white shadow-soft border"
+              className="fixed bottom-28 right-6 text-xs px-3 py-2 rounded-full bg-card shadow-soft border"
             >
               ↓ Novas mensagens
             </button>
           )}
         </div>
 
-        <div className="border-t bg-white px-4 py-3 flex gap-2 items-center">
+        <div className="border-t bg-card px-4 py-3 flex gap-2 items-center">
           {showSendControls ? (
             <>
               {isCurrentUserAdmin && (
@@ -1371,7 +1365,7 @@ export default function ChatPage() {
       </div>
 
       {/* ASIDE */}
-      <aside className="w-80 border-l bg-white p-3 hidden lg:block overflow-auto max-h-[calc(100vh-3.5rem)]">
+      <aside className="w-80 border-l bg-card p-3 hidden lg:block overflow-auto max-h-[calc(100vh-3.5rem)]">
         <h3 className="font-semibold mb-2">Dados do caso</h3>
 
         <div className="space-y-3 text-sm">
@@ -1390,7 +1384,7 @@ export default function ChatPage() {
             <div className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs mt-1 break-words">{caseData.treatmentPlan || "—"}</div>
           </div>
 
-          
+
 
           <div className="pt-2 border-t">
             <div className="text-xs text-muted">Objetivo geral</div>
@@ -1426,14 +1420,14 @@ export default function ChatPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40" />
 
-          <Card className="relative w-full max-w-5xl bg-white border p-0 overflow-hidden rounded-2xl">
+          <Card className="relative w-full max-w-5xl bg-card border p-0 overflow-hidden rounded-2xl">
             <div className="p-5 border-b flex items-center justify-between">
               <div>
                 <h3 className="font-semibold">Formulário obrigatório</h3>
                 <p className="text-sm text-muted">Preencha para liberar o chat.</p>
               </div>
 
- 
+
             </div>
 
             <div className="p-5 overflow-y-auto max-h-[80vh]">

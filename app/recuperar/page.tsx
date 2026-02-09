@@ -32,13 +32,9 @@ export default function RecoverPasswordPage() {
   return (
     <div
       className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4"
-      style={{
-        background:
-          "radial-gradient(circle at 10% 20%, rgba(255,42,149,0.06) 0%, rgba(243,244,246,1) 35%), radial-gradient(circle at 90% 80%, rgba(59,130,246,0.08) 0%, rgba(243,244,246,1) 45%)",
-      }}
     >
       <div className="w-full max-w-md">
-        <div className="bg-white border shadow-sm rounded-2xl p-6">
+        <div className="bg-card border shadow-sm rounded-2xl p-6">
           <div className="mb-5">
             <h1 className="text-xl font-semibold">Recuperar senha</h1>
             <p className="text-sm text-muted mt-1">
