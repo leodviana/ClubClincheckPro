@@ -1326,7 +1326,7 @@ export default function ChatPage() {
 
               <div className="flex items-center gap-2">
                 {(isCurrentUserAdmin || !cannotSend) && (
-                  <Button onClick={handleSendText} className="px-5 py-2">
+                  <Button onClick={handleSendText} disabled={!text.trim()} className="px-5 py-2">
                     Enviar
                   </Button>
                 )}
