@@ -1119,6 +1119,12 @@ export default function ChatPage() {
       setCaseExists(true);
       setStatus("aberto");
       setRefreshKey((k) => k + 1);
+      // Inform user: mentor will receive the question when typed
+      try {
+        setNoticeMessage("Para iniciar o chat, digite sua solicitação e envie a mensagem.");
+        setNoticeVisible(true);
+        setTimeout(() => setNoticeVisible(false), 6000);
+      } catch (e) {}
     } catch (err: any) {
       console.error("failed to submit case", err);
       alert("Não foi possível enviar os dados do caso: " + (err?.message ?? err));
