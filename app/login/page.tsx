@@ -33,8 +33,13 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await signIn(login.trim(), password, manterLogado);
-      router.replace(nextUrl);
+      const signedUser = await signIn(login.trim(), password, manterLogado);
+      // If user is admin (profile === 1), redirect to admin dashboard
+      if (signedUser && signedUser.profile === 1) {
+        router.replace("/admin");
+      } else {
+        router.replace(nextUrl);
+      }
     } catch (err: any) {
       setError(err?.message ?? "Não foi possível realizar o login.");
     } finally {

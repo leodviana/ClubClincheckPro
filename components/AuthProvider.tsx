@@ -6,12 +6,12 @@ import { login as apiLogin, logout as apiLogout, refresh as apiRefresh } from "@
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
-type AuthContextValue = {
+  type AuthContextValue = {
   status: AuthStatus;
   accessToken: string | null;
   user: AuthUser | null;
 
-  signIn: (login: string, senha: string, manterLogado?: boolean) => Promise<void>;
+  signIn: (login: string, senha: string, manterLogado?: boolean) => Promise<AuthUser | null>;
   signOut: () => Promise<void>;
   /** Tenta renovar a sessão via refresh cookie; retorna o novo accessToken (ou null). */
   refreshSession: () => Promise<string | null>;
@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user ?? null);
     setStatus("authenticated");
     setAuthError(null);
+    return res.user ?? null;
   }, []);
 
   const signOut = useCallback(async () => {
