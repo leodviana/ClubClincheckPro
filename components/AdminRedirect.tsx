@@ -10,7 +10,7 @@ export default function AdminRedirect() {
 
   useEffect(() => {
     if (isAuthenticated && user?.profile === 1) {
-      router.replace("/admin/chats");
+      router.replace("/admin");
     }
   }, [isAuthenticated, user, router]);
 
