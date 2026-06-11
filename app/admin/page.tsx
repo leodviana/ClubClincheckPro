@@ -53,6 +53,23 @@ export default function AdminPage() {
           </Card>
         </Link>
         
+        <Link href="/admin/chats/closed" className="block">
+          <Card className={`p-6 cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md`}>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <Image src="/logosemnome.png" alt="Chats fechados" width={40} height={40} className="rounded-2xl object-cover w-auto h-auto" />
+                <div>
+                  <h3 className="font-semibold">Chats Fechados</h3>
+                  <p className="text-sm text-muted mt-1">Visualizar conversas que já foram encerradas.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <span className="text-sm font-medium text-brand-blue">Abrir →</span>
+            </div>
+          </Card>
+        </Link>
         {/* Removed separate 'Pendentes' card per request; 'Atividade de chats' now points to pending-admin-response */}
       </div>
     </div>
